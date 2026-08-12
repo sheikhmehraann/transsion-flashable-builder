@@ -5,6 +5,14 @@ Can be run on Windows/Linux or directly inside GitHub Actions workflows.
 """
 import os, sys, argparse, glob, shutil, subprocess
 
+# Reconfigure stdout/stderr for UTF-8 compatibility
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 # Add project root to sys.path
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
@@ -18,11 +26,17 @@ import zipfile, tempfile, concurrent.futures
 
 class ConsoleLogger:
     def log(self, msg, tag="normal"):
-        print(f"[{tag.upper()}] {msg}")
+        try:
+            print(f"[{tag.upper()}] {msg}")
+        except Exception:
+            print(f"[{tag.upper()}] {msg.encode('ascii', 'replace').decode('ascii')}")
 
     def run_cmd(self, cmd, label):
-        print(f"\n>>> {label}")
-        print(f"    {' '.join(str(c) for c in cmd)}")
+        try:
+            print(f"\n>>> {label}")
+            print(f"    {' '.join(str(c) for c in cmd)}")
+        except Exception:
+            pass
         env = os.environ.copy()
         env["PATH"] = BIN_DIR + os.pathsep + env.get("PATH", "")
         try:
@@ -34,13 +48,16 @@ class ConsoleLogger:
             for line in proc.stdout:
                 line = line.rstrip()
                 if line:
-                    print(f"    {line}")
+                    try:
+                        print(f"    {line}")
+                    except Exception:
+                        print(f"    {line.encode('ascii', 'replace').decode('ascii')}")
             proc.wait()
             ok = proc.returncode == 0
-            print("    ✓ DONE" if ok else f"    ✗ FAILED (exit {proc.returncode})")
+            print("    [OK] DONE" if ok else f"    [FAIL] FAILED (exit {proc.returncode})")
             return ok
         except Exception as e:
-            print(f"    ✗ EXCEPTION: {e}")
+            print(f"    [EXC] EXCEPTION: {e}")
             return False
 
 def copy_4k_padded(src, dst):
@@ -317,7 +334,15 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
     logger = ConsoleLogger()
     base_super = os.path.join(base_dir, "super.img")
     if not os.path.exists(base_super):
-        raise FileNotFoundError(f"Base super.img missing from {base_dir}")
+        # Search recursively for super.img in extracted subdirectories
+        found_supers = glob.glob(os.path.join(base_dir, "**", "super.img"), recursive=True)
+        if found_supers:
+            found_supers.sort(key=lambda p: len(p.split(os.sep)))
+            base_super = found_supers[0]
+            base_dir = os.path.dirname(base_super)
+            print(f"[AUTO-RESOLVE] Resolved stock ROM folder with super.img: {base_dir}")
+        else:
+            raise FileNotFoundError(f"Base super.img missing from {base_dir} (no subfolder contained super.img)")
 
     regions = detect_regions(base_dir)
     region_dir = None
