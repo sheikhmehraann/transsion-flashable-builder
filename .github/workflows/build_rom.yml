@@ -43,7 +43,7 @@ on:
 jobs:
   build:
     name: Build & Publish Flashable ROM
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Code
@@ -54,7 +54,13 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
+      - name: Install System Dependencies & Set Binary Permissions
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y p7zip-full aria2 curl zstd
+          chmod -R +x bin/
+
+      - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
           pip install gdown requests mega.py
@@ -65,23 +71,23 @@ jobs:
           NEEDROM_PASS: ${{ inputs.needrom_pass || secrets.NEEDROM_PASS }}
           NEEDROM_COOKIE: ${{ inputs.needrom_cookie || secrets.NEEDROM_COOKIE }}
         run: |
-          python download_rom.py "${{ inputs.rom_url }}" "work\stock_rom_archive" "${{ inputs.needrom_user }}" "${{ inputs.needrom_pass }}" "${{ inputs.needrom_cookie }}"
+          python download_rom.py "${{ inputs.rom_url }}" "work/stock_rom_archive" "${{ inputs.needrom_user }}" "${{ inputs.needrom_pass }}" "${{ inputs.needrom_cookie }}"
 
       - name: Extract Stock ROM Archive
         run: |
-          mkdir work\extracted_rom
-          7z x "work\stock_rom_archive" -owork\extracted_rom -y
+          mkdir -p work/extracted_rom
+          7z x "work/stock_rom_archive" -owork/extracted_rom -y
 
       - name: Build Recovery Flashable ROM
         run: |
-          python build_cli.py --base-dir "work\extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}"
+          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}"
 
       - name: Upload Flashable ROM to GoFile
         run: |
-          $zipFile = Get-ChildItem -Path "output\*.zip" | Select-Object -First 1
-          if ($zipFile) {
-              python gofile_uploader.py $zipFile.FullName "${{ inputs.gofile_token }}"
-          } else {
-              Write-Error "No ZIP file found in output directory!"
+          ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+              python gofile_uploader.py "$ZIP_FILE" "${{ inputs.gofile_token }}"
+          else
+              echo "Error: No ZIP file found in output directory!"
               exit 1
-          }
+          fi

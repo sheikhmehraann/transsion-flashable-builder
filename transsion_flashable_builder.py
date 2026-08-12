@@ -25,10 +25,20 @@ clean_old_temp_dirs()
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
-BIN_DIR   = os.path.join(BASE_DIR, "bin")
-IMGKIT    = os.path.join(BIN_DIR, "imgkit.exe")
-ZSTD_EXE  = os.path.join(BIN_DIR, "zstd.exe")
-ZSTD_ARM  = os.path.join(BIN_DIR, "zstd-arm64")
+if sys.platform == "win32":
+    WIN_BIN = os.path.join(BASE_DIR, "bin", "windows")
+    BIN_DIR = WIN_BIN if os.path.exists(WIN_BIN) else os.path.join(BASE_DIR, "bin")
+    IMGKIT   = os.path.join(BIN_DIR, "imgkit.exe")
+    ZSTD_EXE = os.path.join(BIN_DIR, "zstd.exe")
+else:
+    LINUX_BIN = os.path.join(BASE_DIR, "bin", "linux")
+    BIN_DIR = LINUX_BIN if os.path.exists(LINUX_BIN) else os.path.join(BASE_DIR, "bin")
+    IMGKIT   = os.path.join(BIN_DIR, "imgkit")
+    ZSTD_EXE = os.path.join(BIN_DIR, "zstd")
+
+ZSTD_ARM  = os.path.join(BASE_DIR, "bin", "zstd-arm64")
+if not os.path.exists(ZSTD_ARM) and os.path.exists(os.path.join(BIN_DIR, "zstd-arm64")):
+    ZSTD_ARM = os.path.join(BIN_DIR, "zstd-arm64")
 
 # ─── Partition classification ─────────────────────────────────────────────────
 # Dynamic partitions that live INSIDE super (managed by lptools)
@@ -500,16 +510,20 @@ class BuildPage(tk.Frame):
     # ══════════════════════════════════════════════════════════════════════════
     def _build_thread(self, base_dir, base_super, region_dir, out_dir,
                       device, codename, fw_ver, level, region_name):
-        temp_root    = tempfile.mkdtemp(prefix="rombuild_")
-        base_parts   = os.path.join(temp_root, "base_unpack")
-        region_parts = os.path.join(temp_root, "region_unpack")
+        base_dir     = os.path.abspath(base_dir)
+        base_super   = os.path.abspath(base_super)
+        region_dir   = os.path.abspath(region_dir)
+        out_dir      = os.path.abspath(out_dir)
 
+        temp_root    = tempfile.mkdtemp(prefix="rombuild_")
+        base_parts   = os.path.abspath(os.path.join(temp_root, "base_unpack"))
+        region_parts = os.path.abspath(os.path.join(temp_root, "region_unpack"))
 
         try:
             for d in (base_parts, region_parts):
                 os.makedirs(d, exist_ok=True)
 
-            region_super = os.path.join(region_dir, "super.img")
+            region_super = os.path.abspath(os.path.join(region_dir, "super.img"))
 
             self.after(0, lambda: self.term.log(
                 f"Device   : {device}\n"

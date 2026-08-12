@@ -332,41 +332,47 @@ chmod 0755 /tmp/META-INF/zstd
 
 def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None, level="3"):
     logger = ConsoleLogger()
+    base_dir = os.path.abspath(base_dir)
+    out_dir = os.path.abspath(out_dir)
+
     base_super = os.path.join(base_dir, "super.img")
     if not os.path.exists(base_super):
         # Search recursively for super.img in extracted subdirectories
         found_supers = glob.glob(os.path.join(base_dir, "**", "super.img"), recursive=True)
         if found_supers:
             found_supers.sort(key=lambda p: len(p.split(os.sep)))
-            base_super = found_supers[0]
+            base_super = os.path.abspath(found_supers[0])
             base_dir = os.path.dirname(base_super)
             print(f"[AUTO-RESOLVE] Resolved stock ROM folder with super.img: {base_dir}")
         else:
             raise FileNotFoundError(f"Base super.img missing from {base_dir} (no subfolder contained super.img)")
+    else:
+        base_super = os.path.abspath(base_super)
 
     regions = detect_regions(base_dir)
     region_dir = None
     if region_name:
         for r_name, r_path in regions:
             if r_name.lower() == region_name.lower():
-                region_dir = r_path
+                region_dir = os.path.abspath(r_path)
                 region_name = r_name
                 break
     if not region_dir and regions:
         region_name, region_dir = regions[0]
+        region_dir = os.path.abspath(region_dir)
 
     if not region_dir:
         raise FileNotFoundError("No valid region subfolder containing super.img found!")
 
     os.makedirs(out_dir, exist_ok=True)
     temp_root = tempfile.mkdtemp(prefix="rombuild_")
-    base_parts = os.path.join(temp_root, "base_unpack")
-    region_parts = os.path.join(temp_root, "region_unpack")
+    base_parts = os.path.abspath(os.path.join(temp_root, "base_unpack"))
+    region_parts = os.path.abspath(os.path.join(temp_root, "region_unpack"))
 
     try:
         os.makedirs(base_parts, exist_ok=True)
         os.makedirs(region_parts, exist_ok=True)
-        region_super = os.path.join(region_dir, "super.img")
+        region_super = os.path.abspath(os.path.join(region_dir, "super.img"))
 
         logger.log(f"Device: {device} ({codename}) | Version: {fw_ver} | Region: {region_name}", "head")
 
