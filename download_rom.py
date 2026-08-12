@@ -5,6 +5,34 @@ Supports Needrom (both page URLs & direct server URLs), Mega.nz, Google Drive, P
 """
 import sys, os, re, subprocess, urllib.request, json
 
+def is_valid_rom_file(dest_path, min_size_mb=10):
+    if not os.path.isfile(dest_path):
+        return False
+    size = os.path.getsize(dest_path)
+    if size < min_size_mb * 1024 * 1024:
+        print(f"[WARN] Downloaded file size ({size / (1024*1024):.2f} MB) is smaller than minimum ROM threshold ({min_size_mb} MB).")
+        try:
+            with open(dest_path, 'rb') as f:
+                head = f.read(512).lower()
+                if b'<!doctype html' in head or b'<html' in head or b'{"error"' in head or b'quota' in head or b'access denied' in head:
+                    print("[ERR] Downloaded content is an HTML/JSON error page, not a valid ROM archive!")
+        except Exception:
+            pass
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        return False
+
+    try:
+        with open(dest_path, 'rb') as f:
+            head = f.read(512).lower()
+            if b'<!doctype html' in head or b'<html' in head or b'access denied' in head:
+                print("[ERR] Downloaded file is an HTML web page, not a valid archive!")
+                os.remove(dest_path)
+                return False
+    except Exception:
+        pass
+    return True
+
 def download_pixeldrain(url, dest_path):
     match = re.search(r'pixeldrain\.com/u/([a-zA-Z0-9]+)', url)
     if match:
@@ -41,11 +69,27 @@ def download_gdrive(url, dest_path):
         print("[DOWNLOAD] Google Drive link detected. Using gdown...")
         try:
             subprocess.run([sys.executable, "-m", "pip", "install", "gdown"], check=True)
-            cmd = [sys.executable, "-m", "gdown", url, "-O", dest_path]
-            res = subprocess.run(cmd)
-            return res.returncode == 0
+            import gdown
+
+            file_id = None
+            match = re.search(r'(?:file/d/|id=)([a-zA-Z0-9_-]+)', url)
+            if match:
+                file_id = match.group(1)
+
+            if file_id:
+                print(f"[DOWNLOAD] Extracted Google Drive File ID: {file_id}")
+                gdown.download(id=file_id, output=dest_path, quiet=False)
+            else:
+                gdown.download(url=url, output=dest_path, quiet=False)
+
+            if is_valid_rom_file(dest_path):
+                return True
         except Exception as e:
-            print(f"[ERR] gdown failed: {e}")
+            print(f"[ERR] gdown download failed: {e}")
+            if "Too many users have viewed or downloaded" in str(e) or "quota" in str(e).lower():
+                print("[ERR] CRITICAL: Google Drive download quota exceeded for this file! Please try another link or share file to your own drive.")
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
             return False
     return False
 
@@ -59,9 +103,11 @@ def download_mega(url, dest_path):
             m = mega.login()
             print("[DOWNLOAD] Downloading from Mega...")
             m.download_url(url, os.path.dirname(dest_path), os.path.basename(dest_path))
-            return os.path.exists(dest_path)
+            return is_valid_rom_file(dest_path)
         except Exception as e:
             print(f"[ERR] Mega download failed: {e}")
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
             return False
     return False
 
@@ -74,7 +120,6 @@ def download_needrom(url, dest_path, user=None, password=None, cookie=None):
     password = password or os.environ.get("NEEDROM_PASS")
     cookie = cookie or os.environ.get("NEEDROM_COOKIE")
 
-    # If it's a direct Needrom server download link (e.g. /server/download.php?...), download directly
     if "/server/download.php" in url or "name=" in url:
         print("[DOWNLOAD] Direct Needrom server download link detected.")
         headers = {}
@@ -127,10 +172,13 @@ def download_needrom(url, dest_path, user=None, password=None, cookie=None):
             return download_direct(url, dest_path, session=session)
     except Exception as e:
         print(f"[ERR] Needrom page download handler failed: {e}")
-        # Fallback to direct download
         return download_direct(url, dest_path)
 
 def download_direct(url, dest_path, session=None, headers=None):
+    if "drive.google.com" in url or "drive.usercontent.google.com" in url:
+        print("[WARN] Skipping direct curl/aria2 download for Google Drive URL.")
+        return False
+
     print(f"[DOWNLOAD] Downloading directly from: {url}")
     
     # Try aria2c first for high speed if installed
@@ -140,7 +188,7 @@ def download_direct(url, dest_path, session=None, headers=None):
             cmd.extend(["--header", f"Cookie: {headers['Cookie']}"])
         cmd.append(url)
         res = subprocess.run(cmd)
-        if res.returncode == 0 and os.path.exists(dest_path):
+        if res.returncode == 0 and is_valid_rom_file(dest_path):
             return True
     except FileNotFoundError:
         pass
@@ -152,7 +200,7 @@ def download_direct(url, dest_path, session=None, headers=None):
             cmd.extend(["-H", f"Cookie: {headers['Cookie']}"])
         cmd.append(url)
         res = subprocess.run(cmd)
-        if res.returncode == 0 and os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
+        if res.returncode == 0 and is_valid_rom_file(dest_path):
             return True
     except Exception:
         pass
@@ -166,7 +214,7 @@ def download_direct(url, dest_path, session=None, headers=None):
                     for chunk in resp.iter_content(chunk_size=1024*1024):
                         if chunk:
                             f.write(chunk)
-                return True
+                return is_valid_rom_file(dest_path)
 
         req_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         if headers:
@@ -188,9 +236,11 @@ def download_direct(url, dest_path, session=None, headers=None):
                 print()
             else:
                 out_file.write(response.read())
-        return True
+        return is_valid_rom_file(dest_path)
     except Exception as e:
         print(f"[ERR] Direct download failed: {e}")
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
         return False
 
 def main():
@@ -231,7 +281,7 @@ def main():
         print("[DOWNLOAD] SUCCESS!")
         sys.exit(0)
 
-    print("[ERR] All download methods failed.")
+    print("[ERR] All download methods failed or file validation failed.")
     sys.exit(1)
 
 if __name__ == "__main__":
