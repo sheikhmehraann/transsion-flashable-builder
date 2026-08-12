@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rom_url:
-        description: 'Stock ROM Download Link (Google Drive, PixelDrain, GoFile, Direct Link)'
+        description: 'Stock ROM Download Link (Needrom, Mega, Google Drive, PixelDrain, GoFile, Direct Link)'
         required: true
         type: string
       device_name:
@@ -22,6 +22,14 @@ on:
       region:
         description: 'Region Subfolder Name (e.g., India)'
         required: true
+        type: string
+      needrom_user:
+        description: 'Needrom Username (Optional - needed if ROM link is on Needrom)'
+        required: false
+        type: string
+      needrom_pass:
+        description: 'Needrom Password (Optional - needed if ROM link is on Needrom)'
+        required: false
         type: string
       gofile_token:
         description: 'GoFile Token (Optional for registered GoFile account)'
@@ -45,11 +53,14 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install gdown requests
+          pip install gdown requests mega.py
 
       - name: Download Stock ROM
+        env:
+          NEEDROM_USER: ${{ inputs.needrom_user || secrets.NEEDROM_USER }}
+          NEEDROM_PASS: ${{ inputs.needrom_pass || secrets.NEEDROM_PASS }}
         run: |
-          python download_rom.py "${{ inputs.rom_url }}" "work\stock_rom_archive"
+          python download_rom.py "${{ inputs.rom_url }}" "work\stock_rom_archive" "${{ inputs.needrom_user }}" "${{ inputs.needrom_pass }}"
 
       - name: Extract Stock ROM Archive
         run: |
