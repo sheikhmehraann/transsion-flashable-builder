@@ -1,0 +1,7 @@
+# Transsion Flashable Builder
+# This project uses only Python standard library modules:
+#   - tkinter (GUI)
+#   - subprocess, zipfile, shutil, threading, tempfile, os, sys, re
+#
+# No additional pip packages are required.
+# Python 3.8+ is recommended.
