@@ -81,21 +81,15 @@ jobs:
           mkdir -p work/extracted_rom
           7z x "work/stock_rom_archive" -owork/extracted_rom -y
 
-      - name: Build Recovery Flashable ROM
+      - name: Build Recovery Flashable ROM (Ultra Level 19 Zstd & 7z Multi-Thread Compression)
         run: |
-          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}"
+          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "19"
 
-      - name: Upload Flashable ROM to GoFile & GitHub Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Flashable ROM to GoFile
         run: |
           ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
-              python gofile_uploader.py "$ZIP_FILE" "${{ inputs.gofile_token }}" || true
-
-              TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
-              echo "[RELEASE] Creating GitHub Release $TAG_NAME..."
-              gh release create "$TAG_NAME" "$ZIP_FILE" --title "Flashable ROM: ${{ inputs.device_name }} (${{ inputs.codename }})" --notes "Flashable recovery ROM for ${{ inputs.device_name }} (${{ inputs.fw_version }})" || true
+              python gofile_uploader.py "$ZIP_FILE" "${{ inputs.gofile_token }}"
           else
               echo "Error: No ZIP file found in output directory!"
               exit 1

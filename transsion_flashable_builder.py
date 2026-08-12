@@ -733,8 +733,8 @@ class BuildPage(tk.Frame):
 
                 env = os.environ.copy()
                 env["PATH"] = BIN_DIR + os.pathsep + env.get("PATH", "")
-                # Use T2 to limit cpu load per process and balance resources
-                cmd = [ZSTD_EXE, f"-{level}", "-T2", src, "-o", dst]
+                # Use T0 for maximum CPU multi-threading across all cores
+                cmd = [ZSTD_EXE, f"-{level}", "--ultra", "-T0", src, "-o", dst]
 
                 proc = subprocess.Popen(
                     cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -742,6 +742,14 @@ class BuildPage(tk.Frame):
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
                 )
                 proc.wait()
+                if proc.returncode != 0:
+                    cmd = [ZSTD_EXE, f"-{level}", "-T0", src, "-o", dst]
+                    proc = subprocess.Popen(
+                        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        text=True, encoding="utf-8", errors="replace", env=env, cwd=BIN_DIR,
+                        creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                    )
+                    proc.wait()
 
                 if proc.returncode != 0:
                     self.after(0, lambda p=pf: self.term.log(f"    ✗ ZSTD FAILED for {p}", "err"))

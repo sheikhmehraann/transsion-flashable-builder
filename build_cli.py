@@ -457,15 +457,21 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
         for fname, src_path in raw_sys_files:
             shutil.copy2(src_path, os.path.join(build_dir, fname))
 
-        print("[ZSTD] Compressing dynamic partitions...")
+        print("[ZSTD] Compressing dynamic partitions with Maximum Ultra (level 19, multi-threaded -T0)...")
         def compress_task(pf):
             src = os.path.join(base_parts, pf)
             dst = os.path.join(build_dir, pf + ".zst")
             env = os.environ.copy()
             env["PATH"] = BIN_DIR + os.pathsep + env.get("PATH", "")
-            cmd = [ZSTD_EXE, f"-{level}", "-T2", src, "-o", dst]
+            # Level 19 Ultra compression with auto multi-threading -T0
+            cmd = [ZSTD_EXE, f"-{level}", "--ultra", "-T0", src, "-o", dst]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, cwd=BIN_DIR)
             proc.wait()
+            if proc.returncode != 0:
+                # Fallback without --ultra if level < 19
+                cmd = [ZSTD_EXE, f"-{level}", "-T0", src, "-o", dst]
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, cwd=BIN_DIR)
+                proc.wait()
             return proc.returncode == 0, pf
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 2)) as executor:
@@ -484,22 +490,34 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
         with open(os.path.join(script_folder, "updater-script"), "w", newline="\n", encoding="utf-8") as uf:
             uf.write("# Dummy file\n")
 
-        cleaned_fw = import_re_sub = os.path.basename(fw_ver).replace('/', '_')
+        cleaned_fw = os.path.basename(fw_ver).replace('/', '_')
         zip_name = f"{cleaned_fw}-recovery-ab.zip"
         zip_path = os.path.join(out_dir, zip_name)
         if os.path.isfile(zip_path):
             os.remove(zip_path)
 
-        print(f"[ZIP] Creating final ZIP: {zip_path}")
-        with zipfile.ZipFile(zip_path, 'w', allowZip64=True) as z:
-            for root_d, _, files in os.walk(build_dir):
-                for fname in files:
-                    full = os.path.join(root_d, fname)
-                    rel = os.path.relpath(full, build_dir).replace(os.sep, '/')
-                    if fname.endswith('.zst'):
-                        z.write(full, rel, compress_type=zipfile.ZIP_STORED)
-                    else:
-                        z.write(full, rel, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+        print(f"[ZIP] Packaging flashable ZIP with maximum speed and compression...")
+        # Try native 7z multi-threaded zip compression first for maximum performance
+        packaged = False
+        try:
+            cmd = ["7z", "a", "-tzip", "-mx=9", "-mmt=on", zip_path, "."]
+            res = subprocess.run(cmd, cwd=build_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if res.returncode == 0 and os.path.exists(zip_path):
+                print("[ZIP] Multi-threaded 7z ZIP compression completed successfully!")
+                packaged = True
+        except Exception:
+            packaged = False
+
+        if not packaged:
+            with zipfile.ZipFile(zip_path, 'w', allowZip64=True) as z:
+                for root_d, _, files in os.walk(build_dir):
+                    for fname in files:
+                        full = os.path.join(root_d, fname)
+                        rel = os.path.relpath(full, build_dir).replace(os.sep, '/')
+                        if fname.endswith('.zst'):
+                            z.write(full, rel, compress_type=zipfile.ZIP_STORED)
+                        else:
+                            z.write(full, rel, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
 
         print(f"[SUCCESS] Flashable ROM Created Successfully: {zip_path}")
         return zip_path
@@ -514,7 +532,7 @@ def main():
     parser.add_argument("--codename", required=True, help="Device codename (e.g. X6871)")
     parser.add_argument("--fw-ver", required=True, help="Firmware version string")
     parser.add_argument("--region", help="Target region folder name (e.g. India)")
-    parser.add_argument("--zstd-lvl", default="3", help="Zstd compression level (default 3)")
+    parser.add_argument("--zstd-lvl", default="19", help="Zstd compression level (default 19)")
 
     args = parser.parse_args()
     build_rom_cli(
