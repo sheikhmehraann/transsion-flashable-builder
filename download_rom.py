@@ -3,7 +3,7 @@
 Smart ROM Downloader for GitHub Actions / CLI
 Supports Needrom (both page URLs & direct server URLs), Mega.nz, Google Drive (with Virus Warning Form Bypass), PixelDrain, GoFile, and direct HTTP/HTTPS URLs.
 """
-import sys, os, re, subprocess, urllib.request, json
+import sys, os, re, subprocess, urllib.request, json, requests, html
 
 def is_valid_rom_file(dest_path, min_size_mb=10):
     if not os.path.isfile(dest_path):
@@ -40,6 +40,20 @@ def download_pixeldrain(url, dest_path):
         api_url = f"https://pixeldrain.com/api/file/{file_id}"
         print(f"[DOWNLOAD] PixelDrain detected. Converting to direct API link: {api_url}")
         return download_direct(api_url, dest_path)
+    return False
+
+def download_sourceforge(url, dest_path):
+    if "sourceforge.net" in url:
+        print(f"[DOWNLOAD] SourceForge link detected: {url}")
+        match = re.search(r'sourceforge\.net/projects/([^/]+)/files/(.+?)(?:/download)?(?:\?.*)?$', url)
+        if match:
+            project, file_path = match.group(1), match.group(2)
+            direct_url = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=master"
+        else:
+            direct_url = url if "use_mirror=" in url else f"{url}?use_mirror=master"
+
+        print(f"[DOWNLOAD] Direct SourceForge master mirror URL: {direct_url}")
+        return download_direct(direct_url, dest_path)
     return False
 
 def download_gofile(url, dest_path):
@@ -231,67 +245,69 @@ def download_direct(url, dest_path, session=None, headers=None):
 
     print(f"[DOWNLOAD] Downloading directly from: {url}")
     
+    ua = "curl/7.88.1" if "sourceforge.net" in url else "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    
     # Try aria2c first for high speed if installed
     try:
-        cmd = ["aria2c", "-x", "16", "-s", "16", "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "-o", os.path.basename(dest_path), "-d", os.path.dirname(dest_path)]
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        cmd = ["aria2c", "-x", "16", "-s", "16", f"--user-agent={ua}", "-o", os.path.basename(dest_path), "-d", os.path.dirname(dest_path)]
         if headers and "Cookie" in headers:
             cmd.extend(["--header", f"Cookie: {headers['Cookie']}"])
         cmd.append(url)
-        res = subprocess.run(cmd)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
             return True
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
     except FileNotFoundError:
         pass
 
-    # Try curl if aria2c not available
+    # Try curl if aria2c not available or failed
     try:
-        cmd = ["curl", "-s", "-L", "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)", "-o", dest_path]
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        cmd = ["curl", "-s", "-L", "-A", ua, "-o", dest_path]
         if headers and "Cookie" in headers:
             cmd.extend(["-H", f"Cookie: {headers['Cookie']}"])
         cmd.append(url)
-        res = subprocess.run(cmd)
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
             return True
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
     except Exception:
         pass
 
-    # Fallback to requests / urllib
+    # Fallback to requests (handles cross-domain 302 redirects cleanly)
     try:
-        if session:
-            resp = session.get(url, stream=True)
-            if resp.status_code == 200:
-                with open(dest_path, 'wb') as f:
-                    for chunk in resp.iter_content(chunk_size=1024*1024):
-                        if chunk:
-                            f.write(chunk)
-                return is_valid_rom_file(dest_path)
-
-        req_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        if headers:
-            req_headers.update(headers)
-        req = urllib.request.Request(url, headers=req_headers)
-        with urllib.request.urlopen(req) as response, open(dest_path, 'wb') as out_file:
-            total_length = response.getheader('content-length')
-            if total_length:
-                total_length = int(total_length)
-                dl = 0
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    dl += len(chunk)
-                    out_file.write(chunk)
-                    done = int(50 * dl / total_length)
-                    print(f"\r  [{'=' * done}{' ' * (50-done)}] {dl/(1024*1024):.1f}/{total_length/(1024*1024):.1f} MB", end='', flush=True)
-                print()
-            else:
-                out_file.write(response.read())
-        return is_valid_rom_file(dest_path)
-    except Exception as e:
-        print(f"[ERR] Direct download failed: {e}")
         if os.path.exists(dest_path):
             os.remove(dest_path)
-        return False
+        req_headers = {"User-Agent": ua}
+        if headers:
+            req_headers.update(headers)
+        
+        req_session = session if session else requests.Session()
+        resp = req_session.get(url, headers=req_headers, allow_redirects=True, stream=True, timeout=30)
+        if resp.status_code in (200, 206):
+            total_len = int(resp.headers.get('content-length', 0))
+            dl = 0
+            with open(dest_path, 'wb') as out_file:
+                for chunk in resp.iter_content(chunk_size=1024*1024):
+                    if chunk:
+                        out_file.write(chunk)
+                        dl += len(chunk)
+                        if total_len > 0:
+                            done = int(50 * dl / total_len)
+                            print(f"\r  [{'=' * done}{' ' * (50-done)}] {dl/(1024*1024):.1f}/{total_len/(1024*1024):.1f} MB", end='', flush=True)
+            print()
+            return is_valid_rom_file(dest_path)
+    except Exception as e:
+        print(f"[ERR] Requests download fallback error: {e}")
+
+    if os.path.exists(dest_path) and not is_valid_rom_file(dest_path):
+        os.remove(dest_path)
+    return False
 
 def main():
     if len(sys.argv) < 3:
@@ -316,6 +332,10 @@ def main():
         sys.exit(0)
 
     if download_pixeldrain(url, dest):
+        print("[DOWNLOAD] SUCCESS!")
+        sys.exit(0)
+
+    if download_sourceforge(url, dest):
         print("[DOWNLOAD] SUCCESS!")
         sys.exit(0)
 
