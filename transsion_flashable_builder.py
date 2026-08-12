@@ -958,8 +958,8 @@ manage_logical_partition() {
 
     case "$operation" in
         clear)
-            lptools unmap "$partition$slot"
-            lptools remove "$partition$slot"
+            lptools unmap "$partition$slot" 2>/dev/null || true
+            lptools remove "$partition$slot" 2>/dev/null || true
             ;;
         create)
             lptools create "$partition$slot" "$size" || checkExit
@@ -971,7 +971,7 @@ manage_logical_partition() {
             lptools map "$partition$slot" || checkExit
             ;;
         unmap_map)
-            lptools unmap "$partition$slot"
+            lptools unmap "$partition$slot" 2>/dev/null || true
             lptools map "$partition$slot" || checkExit
             ;;
     esac
@@ -1015,19 +1015,21 @@ chmod 0755 /tmp/META-INF/zstd
 
 '''
 
-        # -- Banner (Mehraan -- compact for recovery) --
+        # -- Banner (Mehraan -- custom ASCII banner) --
         script += 'ui_print " "\n'
-        script += 'ui_print "========================================="\n'
+        script += 'ui_print "============================================"\n'
+        script += 'ui_print "  ███   ███  ████████  ██   ██  ██████    ███████   ███   ██ "\n'
+        script += 'ui_print "  ████ ████  ██        ██   ██  ██   ██   ██   ██   ████  ██ "\n'
+        script += 'ui_print "  ██ ███ ██  ███████   ███████  ██████    ███████   ██ ██ ██ "\n'
+        script += 'ui_print "  ██  █  ██  ██        ██   ██  ██   ██   ██   ██   ██  ████ "\n'
+        script += 'ui_print "  ██     ██  ████████  ██   ██  ██    ██  ██   ██   ██   ███ "\n'
         script += 'ui_print " "\n'
-        script += 'ui_print "          M E H R A A N"\n'
-        script += 'ui_print " "\n'
-        script += 'ui_print "     Flashing Script By Mehraan"\n'
-        script += 'ui_print " "\n'
-        script += 'ui_print "========================================="\n'
-        script += f'ui_print "  Device   : {device}"\n'
-        script += f'ui_print "  Codename : {codename}"\n'
+        script += 'ui_print "       Transsion Flashable ROM Builder"\n'
+        script += 'ui_print "             Powered by Mehraan"\n'
+        script += 'ui_print "============================================"\n'
+        script += f'ui_print "  Device   : {device} ({codename})"\n'
         script += f'ui_print "  Version  : {fw_ver}"\n'
-        script += 'ui_print "========================================="\n'
+        script += 'ui_print "============================================"\n'
         script += 'ui_print " "\n\n'
         # ── Preflight ──
         script += 'checkDevice\n\n'
