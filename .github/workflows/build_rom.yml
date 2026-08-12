@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rom_url:
-        description: 'Stock ROM Download Link (Needrom, Mega, Google Drive, PixelDrain, GoFile, Direct Link)'
+        description: 'Stock ROM Download Link (Needrom page/server URL, Mega, Google Drive, PixelDrain, GoFile, Direct Link)'
         required: true
         type: string
       device_name:
@@ -23,16 +23,20 @@ on:
         description: 'Region Subfolder Name (e.g., India)'
         required: true
         type: string
+      needrom_cookie:
+        description: 'Needrom Session/CF Cookie (Optional - for private/server Needrom links)'
+        required: false
+        type: string
       needrom_user:
-        description: 'Needrom Username (Optional - needed if ROM link is on Needrom)'
+        description: 'Needrom Username (Optional)'
         required: false
         type: string
       needrom_pass:
-        description: 'Needrom Password (Optional - needed if ROM link is on Needrom)'
+        description: 'Needrom Password (Optional)'
         required: false
         type: string
       gofile_token:
-        description: 'GoFile Token (Optional for registered GoFile account)'
+        description: 'GoFile Token (Optional)'
         required: false
         type: string
 
@@ -59,8 +63,9 @@ jobs:
         env:
           NEEDROM_USER: ${{ inputs.needrom_user || secrets.NEEDROM_USER }}
           NEEDROM_PASS: ${{ inputs.needrom_pass || secrets.NEEDROM_PASS }}
+          NEEDROM_COOKIE: ${{ inputs.needrom_cookie || secrets.NEEDROM_COOKIE }}
         run: |
-          python download_rom.py "${{ inputs.rom_url }}" "work\stock_rom_archive" "${{ inputs.needrom_user }}" "${{ inputs.needrom_pass }}"
+          python download_rom.py "${{ inputs.rom_url }}" "work\stock_rom_archive" "${{ inputs.needrom_user }}" "${{ inputs.needrom_pass }}" "${{ inputs.needrom_cookie }}"
 
       - name: Extract Stock ROM Archive
         run: |
