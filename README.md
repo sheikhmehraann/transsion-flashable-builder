@@ -2,7 +2,29 @@
 
 > Convert Transsion (Infinix / Tecno / itel) stock firmware dumps into recovery-flashable ZIPs with A/B slot support via lptools.
 
-## Features
+## GitHub Actions Cloud Builder ⚡ (Automated)
+
+You can build flashable ROMs directly on GitHub servers without downloading huge firmware files to your PC!
+
+1. Go to the **Actions** tab in your repository.
+2. Select **Build Flashable ROM & Upload to GoFile**.
+3. Click **Run workflow** and fill in:
+   - **Stock ROM Download Link** (Google Drive, PixelDrain, GoFile, or direct link)
+   - **Device Name** (e.g. `Infinix GT 20 Pro`)
+   - **Codename** (e.g. `X6871`)
+   - **Firmware Version** (e.g. `X6871-15.1.2.165SP05(OP001PF001AZ)`)
+   - **Region Subfolder** (e.g. `India`)
+4. Click **Run workflow** — GitHub Actions will:
+   - Download & extract the stock ROM
+   - Unpack & merge region `super.img` into base
+   - Compress dynamic partitions with parallel `zstd`
+   - Generate `update-binary` with custom MEHRAAN banner & slot logic
+   - Build `<fw_version>-recovery-ab.zip`
+   - Upload the ZIP directly to **GoFile** and post the download link in the summary!
+
+---
+
+## Local Features
 
 - **Super Partition Merge** — Unpacks base + region `super.img` using `imgkit`, intelligently merges region overlays (especially `tr_*` Transsion layers) into the base
 - **Smart Region Detection** — Auto-detects region subfolders containing their own `super.img` for multi-region firmware builds

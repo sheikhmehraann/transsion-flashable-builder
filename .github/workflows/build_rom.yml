@@ -1,0 +1,71 @@
+name: Build Flashable ROM & Upload to GoFile
+
+on:
+  workflow_dispatch:
+    inputs:
+      rom_url:
+        description: 'Stock ROM Download Link (Google Drive, PixelDrain, GoFile, Direct Link)'
+        required: true
+        type: string
+      device_name:
+        description: 'Device Name (e.g., Infinix GT 20 Pro)'
+        required: true
+        type: string
+      codename:
+        description: 'Device Codename (e.g., X6871)'
+        required: true
+        type: string
+      fw_version:
+        description: 'Firmware Version (e.g., X6871-15.1.2.165SP05(OP001PF001AZ))'
+        required: true
+        type: string
+      region:
+        description: 'Region Subfolder Name (e.g., India)'
+        required: true
+        type: string
+      gofile_token:
+        description: 'GoFile Token (Optional for registered GoFile account)'
+        required: false
+        type: string
+
+jobs:
+  build:
+    name: Build & Publish Flashable ROM
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install gdown requests
+
+      - name: Download Stock ROM
+        run: |
+          python download_rom.py "${{ inputs.rom_url }}" "work\stock_rom_archive"
+
+      - name: Extract Stock ROM Archive
+        run: |
+          mkdir work\extracted_rom
+          7z x "work\stock_rom_archive" -owork\extracted_rom -y
+
+      - name: Build Recovery Flashable ROM
+        run: |
+          python build_cli.py --base-dir "work\extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}"
+
+      - name: Upload Flashable ROM to GoFile
+        run: |
+          $zipFile = Get-ChildItem -Path "output\*.zip" | Select-Object -First 1
+          if ($zipFile) {
+              python gofile_uploader.py $zipFile.FullName "${{ inputs.gofile_token }}"
+          } else {
+              Write-Error "No ZIP file found in output directory!"
+              exit 1
+          }
