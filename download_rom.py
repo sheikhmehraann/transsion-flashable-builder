@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Smart ROM Downloader for GitHub Actions / CLI
-Supports Needrom (both page URLs & direct server URLs), Mega.nz, Google Drive, PixelDrain, GoFile, and direct HTTP/HTTPS URLs.
+Supports Needrom (both page URLs & direct server URLs), Mega.nz, Google Drive (with Virus Warning Form Bypass), PixelDrain, GoFile, and direct HTTP/HTTPS URLs.
 """
 import sys, os, re, subprocess, urllib.request, json
 
@@ -65,32 +65,82 @@ def download_gofile(url, dest_path):
     return False
 
 def download_gdrive(url, dest_path):
-    if "drive.google.com" in url or "drive.usercontent.google.com" in url:
-        print("[DOWNLOAD] Google Drive link detected. Using gdown...")
+    if "drive.google.com" not in url and "drive.usercontent.google.com" not in url and not (len(url.strip()) >= 25 and '/' not in url.strip()):
+        return False
+
+    print(f"[DOWNLOAD] Google Drive link detected: {url}")
+    file_id = None
+    match = re.search(r'(?:file/d/|id=|d/)([a-zA-Z0-9_-]{25,})', url)
+    if match:
+        file_id = match.group(1)
+    elif len(url.strip()) >= 25 and '/' not in url.strip():
+        file_id = url.strip()
+
+    # Strategy 1: gdown library
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", "gdown"], check=True)
+        import gdown
+        print(f"[GDRIVE] Strategy 1: Attempting download via gdown (ID: {file_id or 'URL'})...")
+        if file_id:
+            gdown.download(id=file_id, output=dest_path, quiet=False, use_cookies=True)
+        else:
+            gdown.download(url=url, output=dest_path, quiet=False, use_cookies=True)
+
+        if is_valid_rom_file(dest_path):
+            print("[GDRIVE] Strategy 1 (gdown) Succeeded!")
+            return True
+    except Exception as e:
+        print(f"[GDRIVE] Strategy 1 (gdown) failed: {e}")
+
+    # Strategy 2: Direct Virus Warning Form Bypass Engine
+    if file_id:
+        print(f"[GDRIVE] Strategy 2: Form-based Virus Warning Bypass Engine for ID: {file_id}...")
         try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "gdown"], check=True)
-            import gdown
+            import requests
+            session = requests.Session()
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            })
+            base_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+            resp = session.get(base_url)
 
-            file_id = None
-            match = re.search(r'(?:file/d/|id=)([a-zA-Z0-9_-]+)', url)
-            if match:
-                file_id = match.group(1)
+            action_match = re.search(r'action=["\']([^"\']+)["\']', resp.text)
+            if action_match:
+                action_url = action_match.group(1)
+                inputs = dict(re.findall(r'name=["\']([^"\']+)["\']\s+value=["\']([^"\']*)["\']', resp.text))
+                print(f"[GDRIVE] Extracted virus warning form parameters: {inputs}")
 
-            if file_id:
-                print(f"[DOWNLOAD] Extracted Google Drive File ID: {file_id}")
-                gdown.download(id=file_id, output=dest_path, quiet=False)
-            else:
-                gdown.download(url=url, output=dest_path, quiet=False)
+                stream_resp = session.get(action_url, params=inputs, stream=True)
+                if stream_resp.status_code == 200:
+                    content_type = stream_resp.headers.get("Content-Type", "").lower()
+                    if "text/html" in content_type:
+                        if "quota exceeded" in stream_resp.text.lower() or "too many users" in stream_resp.text.lower():
+                            print("[ERR] CRITICAL: Google Drive quota limit exceeded for this file!")
+                            return False
 
-            if is_valid_rom_file(dest_path):
-                return True
+                    total_len = stream_resp.headers.get("Content-Length")
+                    print(f"[GDRIVE] Streaming download (Length: {total_len or 'Unknown'})...")
+                    with open(dest_path, "wb") as f:
+                        dl = 0
+                        for chunk in stream_resp.iter_content(chunk_size=2 * 1024 * 1024):
+                            if chunk:
+                                f.write(chunk)
+                                dl += len(chunk)
+                                if total_len:
+                                    done = int(50 * dl / int(total_len))
+                                    print(f"\r  [{'=' * done}{' ' * (50-done)}] {dl/(1024*1024):.1f}/{int(total_len)/(1024*1024):.1f} MB", end="", flush=True)
+                                else:
+                                    print(f"\r  Downloaded {dl/(1024*1024):.1f} MB", end="", flush=True)
+                        print()
+
+                    if is_valid_rom_file(dest_path):
+                        print("[GDRIVE] Strategy 2 (Form Bypass) Succeeded!")
+                        return True
         except Exception as e:
-            print(f"[ERR] gdown download failed: {e}")
-            if "Too many users have viewed or downloaded" in str(e) or "quota" in str(e).lower():
-                print("[ERR] CRITICAL: Google Drive download quota exceeded for this file! Please try another link or share file to your own drive.")
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
-            return False
+            print(f"[GDRIVE] Strategy 2 (Form Bypass) failed: {e}")
+
+    if os.path.exists(dest_path):
+        os.remove(dest_path)
     return False
 
 def download_mega(url, dest_path):
@@ -132,7 +182,7 @@ def download_needrom(url, dest_path, user=None, password=None, cookie=None):
         import requests
         session = requests.Session()
         session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Referer": "https://www.needrom.com/"
         })
