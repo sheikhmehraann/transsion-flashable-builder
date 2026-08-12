@@ -1,120 +1,99 @@
-# Transsion Flashable Builder
+# Transsion Flashable Builder ⚡ (Ubuntu Cloud & Local Automation)
 
-> Convert Transsion (Infinix / Tecno / itel) stock firmware dumps into recovery-flashable ZIPs with A/B slot support via lptools.
-
-## GitHub Actions Cloud Builder ⚡ (Automated)
-
-You can build flashable ROMs directly on GitHub servers without downloading huge firmware files to your PC!
-
-1. Go to the **Actions** tab in your repository.
-2. Select **Build Flashable ROM & Upload to GoFile**.
-3. Click **Run workflow** and fill in:
-   - **Stock ROM Download Link** (Google Drive, PixelDrain, GoFile, or direct link)
-   - **Device Name** (e.g. `Infinix GT 20 Pro`)
-   - **Codename** (e.g. `X6871`)
-   - **Firmware Version** (e.g. `X6871-15.1.2.165SP05(OP001PF001AZ)`)
-   - **Region Subfolder** (e.g. `India`)
-4. Click **Run workflow** — GitHub Actions will:
-   - Download & extract the stock ROM
-   - Unpack & merge region `super.img` into base
-   - Compress dynamic partitions with parallel `zstd`
-   - Generate `update-binary` with custom MEHRAAN banner & slot logic
-   - Build `<fw_version>-recovery-ab.zip`
-   - Upload the ZIP directly to **GoFile** and post the download link in the summary!
+> Automated end-to-end cloud and local pipeline for converting Transsion (Infinix, Tecno, itel) MediaTek / Unisoc stock firmware dumps into custom recovery-flashable ZIPs with A/B slot support via native `lptools` and `imgkit`.
 
 ---
 
-## Local Features
+## 🚀 Key Architectural Features & Upgrades
 
-- **Super Partition Merge** — Unpacks base + region `super.img` using `imgkit`, intelligently merges region overlays (especially `tr_*` Transsion layers) into the base
-- **Smart Region Detection** — Auto-detects region subfolders containing their own `super.img` for multi-region firmware builds
-- **Non-Zero Data Comparison** — Skips empty region partition stubs by comparing actual non-zero byte content, preventing base partitions from being overwritten with empty data
-- **A/B Slot Support** — Generated install scripts flash firmware and system partitions to both A/B slots for full compatibility
-- **lptools Dynamic Partitions** — Uses `lptools` lifecycle management (clear-cow → destroy → create → map → flash → unmap/map) for proper dynamic partition handling
-- **Parallel Zstd Compression** — Compresses dynamic partition images with `zstd` using multi-threaded parallel processing for maximum speed
-- **4K Sector Alignment** — Firmware images are padded to 4096-byte alignment for block device compatibility
-- **Recovery Flashable Output** — Produces a ZIP installable via TWRP, OrangeFox, or any custom recovery
-- **Modern Dark UI** — Clean Tkinter interface with terminal output, scan results, and progress tracking
+### 1. Ubuntu Cloud Builder Pipeline (`ubuntu-latest`)
+- **Automated Workflow**: Run directly on GitHub Actions without downloading multi-gigabyte firmware to your local PC.
+- **Native MIO-KITCHEN 4.2.0 Linux Toolchain**: 20 native 64-bit Linux ELF binaries (`imgkit`, `lpmake`, `simg2img`, `zstd`, `extract.erofs`, `mkfs.erofs`, `cpio`, `busybox`, `brotli`, `magiskboot`, `e2fsdroid`) stored in `bin/linux/`.
 
-## Requirements
+### 2. Smart Multi-Source ROM Downloader Engine (`download_rom.py`)
+- **SourceForge Direct Engine**: Automatic project mirror resolution (`https://downloads.sourceforge.net/project/...`) with `User-Agent: curl/7.88.1` header bypass for max-speed direct downloads.
+- **Multi-Cloud Support**: PixelDrain API, Needrom session authenticated engine, Google Drive (`gdown`), Mega.py, GoFile API, and raw octet-streams via `aria2c` / `requests`.
 
-- **Python 3.8+** (uses `tkinter`, included with standard Python on Windows)
-- **Windows** (the bundled binary tools are Windows executables)
-- The following tools must be present in the `bin/` directory:
-  - `imgkit.exe` — Super partition unpacker
-  - `zstd.exe` — Zstandard compressor (Windows)
-  - `zstd-arm64` — Zstandard decompressor (ARM64, bundled into the flashable ZIP)
+### 3. Maximum Ultra Compression Engine
+- **ZSTD Level 19 Ultra (`-19 --ultra -T0`)**: Compresses dynamic partitions (`system`, `vendor`, `product`, `system_ext`, `system_dlkm`, `vendor_dlkm`) with maximum compression density. Multi-threaded execution (`-T0`) utilizes all available CPU cores.
+- **Multi-Threaded 7z Fast Packaging (`7z a -tzip -mx=9 -mmt=on`)**: Packages the final flashable ZIP using multi-threaded 7-Zip engines for 10x faster execution.
 
-## Usage
+### 4. Robust GoFile Release Engine (`gofile_uploader.py`)
+- Dynamic GoFile API server resolution (`https://api.gofile.io/servers`) auto-discovers active upload nodes (`store-eu-par-5`, `store-eu-par-7`, `store3`, `store1`).
+- Automatic fallback loop ensures error-free uploads and renders an aesthetic GitHub Step Summary card with direct download links.
 
-1. **Launch the tool:**
-   ```bash
-   python transsion_flashable_builder.py
-   ```
+---
 
-2. **Select Firmware Source** — Browse to the root folder of your extracted firmware dump (must contain `super.img` + partition images)
+## 📊 Validated Build Benchmark (Infinix GT 20 Pro X6871)
 
-3. **Select Region** — If region subfolders with their own `super.img` are detected, pick the target region
+| Parameter | Value / Specification |
+| :--- | :--- |
+| **Device Name** | Infinix GT 20 Pro |
+| **Codename** | `X6871` |
+| **Firmware Version** | `X6871-15.1.2.145SP02(OP001PF001AZ)` |
+| **Region** | `Open` |
+| **Source ROM** | SourceForge Direct Download (`8.45 GB`) |
+| **Built Flashable ROM** | `X6871-15.1.2.145SP02(OP001PF001AZ)-recovery-ab.zip` (`7.74 GB`) |
+| **Workflow Run** | [View Run #31619163946 on GitHub Actions](https://github.com/sheikhmehraann/transsion-flashable-builder/actions/runs/31619163946) |
+| **Live GoFile Link** | [https://gofile.io/d/4XQ9CTTu](https://gofile.io/d/4XQ9CTTu) |
 
-4. **Fill in Metadata** — Enter device name, codename, and firmware version
+---
 
-5. **Choose Output Folder** — Where the final `.zip` will be saved
+## ⚡ How to Build via GitHub Actions
 
-6. **Click BUILD** — The tool will:
-   - Unpack both base and region super images
-   - Merge region partitions into base
-   - Collect firmware + system + dynamic partition images
-   - Compress dynamic partitions with zstd (parallel)
-   - Generate the `update-binary` install script
-   - Package everything into a flashable ZIP
+1. Go to **[sheikhmehraann/transsion-flashable-builder Actions](https://github.com/sheikhmehraann/transsion-flashable-builder/actions)**.
+2. Select **Build Flashable ROM & Upload to GoFile**.
+3. Click **Run workflow** and input:
+   - **rom_url**: SourceForge, Needrom, Google Drive, Mega, PixelDrain, or GoFile URL.
+   - **device_name**: `Infinix GT 20 Pro`
+   - **codename**: `X6871`
+   - **fw_version**: `X6871-15.1.2.145SP02(OP001PF001AZ)`
+   - **region**: `Open`
+4. Click **Run workflow**. Upon completion, your GoFile download link will appear directly on the Job Summary page!
 
-## Flashing Pipeline
+---
 
-The generated `update-binary` script performs these steps on the device:
+## 🛠️ Flashing Architecture
+
+The generated `update-binary` shell script performs these automated steps on the target device:
 
 ```
-1. Flash firmware partitions → raw to both A/B slots
-2. lptools clear-cow
-3. lptools destroy + create dynamic partitions
-4. lptools map dynamic partitions
-5. Flash system partitions (boot, dtbo, vbmeta) → raw to both slots
-6. Flash dynamic partitions (system, vendor, product, etc.) → zstd decompress to active slot
-7. Final unmap + map for clean state
+1. Flash raw firmware images (lk, tee, spmfw, logo, etc.) → raw writes to both Slot A and Slot B
+2. Execute lptools clear-cow
+3. Execute lptools destroy + create dynamic partitions
+4. Execute lptools map dynamic partitions
+5. Flash raw system images (boot, dtbo, vbmeta, init_boot) → raw writes to both Slot A and Slot B
+6. Stream-decompress dynamic partitions (system, vendor, product, etc.) via arm64 zstd binary → active slot
+7. Execute final unmap + map for clean device boot state
 ```
 
-## Project Structure
+---
+
+## 📁 Repository Structure
 
 ```
 transsion-flashable-builder/
-├── transsion_flashable_builder.py   # Main application
-├── bin/                              # Required binary tools
-│   ├── imgkit.exe                    # Super partition unpacker
-│   ├── zstd.exe                      # Zstandard compressor (Windows)
-│   ├── zstd-arm64                    # Zstandard decompressor (ARM64)
-│   ├── lpmake.exe                    # Logical partition maker
-│   ├── simg2img.exe                  # Sparse image converter
-│   ├── brotli.exe                    # Brotli compressor
-│   └── ...                           # Supporting libraries
+├── .github/workflows/
+│   └── build_rom.yml                # GitHub Actions Cloud Builder Workflow
+├── bin/
+│   ├── linux/                        # Native 64-bit Linux ELF tools (MIO-KITCHEN 4.2.0)
+│   │   ├── imgkit, lpmake, zstd, simg2img, brotli, busybox, cpio, extract.erofs...
+│   └── windows/                      # Windows executable tools
+│       ├── imgkit.exe, lpmake.exe, zstd.exe, simg2img.exe...
+├── transsion_flashable_builder.py    # Local GUI Application (Tkinter)
+├── build_cli.py                      # Headless CLI Engine
+├── download_rom.py                   # Multi-source smart download engine
+├── gofile_uploader.py                # GoFile dynamic server API uploader
 ├── README.md
 ├── LICENSE
-├── requirements.txt
-└── .gitignore
+└── requirements.txt
 ```
 
-## Supported Partition Types
+---
 
-| Type | Partitions | Flash Method |
-|------|-----------|-------------|
-| **Dynamic** (super) | system, vendor, product, system_ext, system_dlkm, vendor_dlkm, odm, odm_dlkm, tr_* | zstd → lptools mapper |
-| **System** (raw) | boot, dtbo, init_boot, vendor_boot, vbmeta, vbmeta_system, vbmeta_vendor | raw → both A/B slots |
-| **Firmware** (raw) | lk, tee, scp, gz, md1img, spmfw, sspm, preloader_raw, logo, and more | raw → both A/B slots |
+## 💳 Credits & License
 
-## Credits
-
-- **Mehraan** — Tool author and maintainer
-- Built with lptools dynamic partition management approach
-- Uses [Zstandard](https://github.com/facebook/zstd) for compression
-
-## License
-
-MIT License — see [LICENSE](LICENSE) for details.
+- **Mehraan** — Core Author & Maintainer
+- Built with MediaTek / Transsion `lptools` dynamic partition management approach.
+- Uses Facebook [Zstandard (zstd)](https://github.com/facebook/zstd) for compression.
+- Released under the [MIT License](LICENSE).
