@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rom_url:
-        description: 'Stock ROM Download Link (Needrom page/server URL, Mega, Google Drive, PixelDrain, GoFile, Direct Link)'
+        description: 'Stock ROM Download Link (Needrom page/server URL, Mega, Google Drive, PixelDrain, GoFile, SourceForge, Direct Link)'
         required: true
         type: string
       device_name:
@@ -45,6 +45,9 @@ jobs:
     name: Build & Publish Flashable ROM
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -82,11 +85,17 @@ jobs:
         run: |
           python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}"
 
-      - name: Upload Flashable ROM to GoFile
+      - name: Upload Flashable ROM to GoFile & GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
-              python gofile_uploader.py "$ZIP_FILE" "${{ inputs.gofile_token }}"
+              python gofile_uploader.py "$ZIP_FILE" "${{ inputs.gofile_token }}" || true
+
+              TAG_NAME="release-$(date +'%Y%m%d-%H%M%S')"
+              echo "[RELEASE] Creating GitHub Release $TAG_NAME..."
+              gh release create "$TAG_NAME" "$ZIP_FILE" --title "Flashable ROM: ${{ inputs.device_name }} (${{ inputs.codename }})" --notes "Flashable recovery ROM for ${{ inputs.device_name }} (${{ inputs.fw_version }})" || true
           else
               echo "Error: No ZIP file found in output directory!"
               exit 1
