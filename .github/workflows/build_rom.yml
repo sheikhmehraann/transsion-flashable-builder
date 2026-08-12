@@ -81,9 +81,9 @@ jobs:
           mkdir -p work/extracted_rom
           7z x "work/stock_rom_archive" -owork/extracted_rom -y
 
-      - name: Build Recovery Flashable ROM (Ultra Level 19 Zstd & 7z Multi-Thread Compression)
+      - name: Build Recovery Flashable ROM (Zstd Fast Level 3 Compression)
         run: |
-          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "19"
+          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "3"
 
       - name: Upload Flashable ROM to GoFile
         run: |

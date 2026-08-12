@@ -1037,21 +1037,13 @@ chmod 0755 /tmp/META-INF/zstd
 
 '''
 
-        # -- Banner (Mehraan -- custom ASCII banner) --
         script += 'ui_print " "\n'
-        script += 'ui_print "============================================"\n'
-        script += 'ui_print "  ███   ███  ████████  ██   ██  ██████    ███████   ███   ██ "\n'
-        script += 'ui_print "  ████ ████  ██        ██   ██  ██   ██   ██   ██   ████  ██ "\n'
-        script += 'ui_print "  ██ ███ ██  ███████   ███████  ██████    ███████   ██ ██ ██ "\n'
-        script += 'ui_print "  ██  █  ██  ██        ██   ██  ██   ██   ██   ██   ██  ████ "\n'
-        script += 'ui_print "  ██     ██  ████████  ██   ██  ██    ██  ██   ██   ██   ███ "\n'
-        script += 'ui_print " "\n'
-        script += 'ui_print "       Transsion Flashable ROM Builder"\n'
-        script += 'ui_print "             Powered by Mehraan"\n'
-        script += 'ui_print "============================================"\n'
+        script += 'ui_print "==========================================================="\n'
+        script += 'ui_print "               Flashing Script By Mehraan"\n'
+        script += 'ui_print "-----------------------------------------------------------"\n'
         script += f'ui_print "  Device   : {device} ({codename})"\n'
-        script += f'ui_print "  Version  : {fw_ver}"\n'
-        script += 'ui_print "============================================"\n'
+        script += f'ui_print "  Firmware : {fw_ver}"\n'
+        script += 'ui_print "==========================================================="\n'
         script += 'ui_print " "\n\n'
         # ── Preflight ──
         script += 'checkDevice\n\n'

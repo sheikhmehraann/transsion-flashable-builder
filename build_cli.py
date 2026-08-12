@@ -234,19 +234,12 @@ chmod 0755 /tmp/META-INF/zstd
 '''
 
     script += 'ui_print " "\n'
-    script += 'ui_print "============================================"\n'
-    script += 'ui_print "  ███   ███  ████████  ██   ██  ██████    ███████   ███   ██ "\n'
-    script += 'ui_print "  ████ ████  ██        ██   ██  ██   ██   ██   ██   ████  ██ "\n'
-    script += 'ui_print "  ██ ███ ██  ███████   ███████  ██████    ███████   ██ ██ ██ "\n'
-    script += 'ui_print "  ██  █  ██  ██        ██   ██  ██   ██   ██   ██   ██  ████ "\n'
-    script += 'ui_print "  ██     ██  ████████  ██   ██  ██    ██  ██   ██   ██   ███ "\n'
-    script += 'ui_print " "\n'
-    script += 'ui_print "       Transsion Flashable ROM Builder"\n'
-    script += 'ui_print "             Powered by Mehraan"\n'
-    script += 'ui_print "============================================"\n'
+    script += 'ui_print "==========================================================="\n'
+    script += 'ui_print "               Flashing Script By Mehraan"\n'
+    script += 'ui_print "-----------------------------------------------------------"\n'
     script += f'ui_print "  Device   : {device} ({codename})"\n'
-    script += f'ui_print "  Version  : {fw_ver}"\n'
-    script += 'ui_print "============================================"\n'
+    script += f'ui_print "  Firmware : {fw_ver}"\n'
+    script += 'ui_print "==========================================================="\n'
     script += 'ui_print " "\n\n'
 
     script += 'checkDevice\n\n'
@@ -287,35 +280,34 @@ chmod 0755 /tmp/META-INF/zstd
         script += f'        "{name}:{size}"{suffix}\n'
     script += '\n'
 
-    script += '# Map dynamic partitions for active slot\n'
-    script += 'process_partitions_for_slot "map" "$SLOT" \\\n'
-    for i, name in enumerate(dyn_names):
-        suffix = ' \\' if i < len(dyn_names) - 1 else ''
-        script += f'        "{name}"{suffix}\n'
-    script += '\n'
-
     if raw_sys_files:
         sys_order = ["boot", "init_boot", "dtbo", "vendor_boot", "vbmeta", "vbmeta_system", "vbmeta_vendor"]
         sorted_sys = list(raw_sys_files)
         sorted_sys.sort(key=lambda x: sys_order.index(stem_of(x[0]).lower()) if stem_of(x[0]).lower() in sys_order else 99)
         
         script += 'ui_print " "\n'
-        script += 'ui_print "Patching system..."\n'
+        script += 'ui_print "Patching raw system partitions..."\n'
         for fname, _ in sorted_sys:
             st = stem_of(fname)
-            script += f'flash_firmware_both_slots "{fname}" "{st}"\n'
+            script += f'flash_partition "{fname}" "/dev/block/by-name/{st}_a" "- Flashing partition {st} to active slots"\n'
+            script += f'flash_partition "{fname}" "/dev/block/by-name/{st}_b" ""\n'
+        script += '\n'
 
-    script += '\n'
-    for name, size, pf in dynamic_list:
-        script += f'flash_partition_zstd "{pf}.zst" "/dev/block/mapper/{name}$SLOT"\n'
+    if dynamic_list:
+        script += 'ui_print " "\n'
+        script += 'ui_print "Patching dynamic partitions to active slot mapper devices..."\n'
+        for name, _, original_filename in dynamic_list:
+            script += f'flash_partition_zstd "{original_filename}.zst" "/dev/block/mapper/{name}$SLOT"\n'
+        script += '\n'
 
-    script += '\n# Final unmapping and mapping to ensure proper mounting\n'
+    script += 'ui_print " "\n'
+    script += 'ui_print "Unmapping & remapping dynamic partitions..."\n'
     script += 'process_partitions_for_slot "unmap_map" "$SLOT" \\\n'
     for i, name in enumerate(dyn_names):
         suffix = ' \\' if i < len(dyn_names) - 1 else ''
         script += f'        "{name}"{suffix}\n'
+    script += '\n'
 
-    script += '\nui_print " "\n'
     script += 'ui_print "============================================="\n'
     script += 'ui_print "                                             "\n'
     script += 'ui_print "         INSTALLATION COMPLETE!              "\n'
@@ -337,7 +329,6 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
 
     base_super = os.path.join(base_dir, "super.img")
     if not os.path.exists(base_super):
-        # Search recursively for super.img in extracted subdirectories
         found_supers = glob.glob(os.path.join(base_dir, "**", "super.img"), recursive=True)
         if found_supers:
             found_supers.sort(key=lambda p: len(p.split(os.sep)))
@@ -370,21 +361,24 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
     region_parts = os.path.abspath(os.path.join(temp_root, "region_unpack"))
 
     try:
-        os.makedirs(base_parts, exist_ok=True)
-        os.makedirs(region_parts, exist_ok=True)
+        for d in (base_parts, region_parts):
+            os.makedirs(d, exist_ok=True)
+
         region_super = os.path.abspath(os.path.join(region_dir, "super.img"))
 
-        logger.log(f"Device: {device} ({codename}) | Version: {fw_ver} | Region: {region_name}", "head")
+        print(f"[BUILD] Device: {device} ({codename}), Version: {fw_ver}, Region: {region_name}")
+        print(f"[UNPACK] Unpacking base super.img...")
+        res = subprocess.run([IMGKIT, "unpack", "-i", base_super, "-o", base_parts, "-l", "2"], capture_output=True, text=True, cwd=BIN_DIR)
+        if res.returncode != 0:
+            raise RuntimeError(f"Unpack base super.img failed: {res.stderr}")
 
-        ok = logger.run_cmd([IMGKIT, "unpack", "-i", base_super, "-o", base_parts, "-l", "2"], "Unpacking Base super.img")
-        if not ok: raise RuntimeError("Base super.img unpack failed.")
+        print(f"[UNPACK] Unpacking region super.img...")
+        res = subprocess.run([IMGKIT, "unpack", "-i", region_super, "-o", region_parts, "-l", "2"], capture_output=True, text=True, cwd=BIN_DIR)
+        if res.returncode != 0:
+            raise RuntimeError(f"Unpack region super.img failed: {res.stderr}")
 
-        ok = logger.run_cmd([IMGKIT, "unpack", "-i", region_super, "-o", region_parts, "-l", "2"], "Unpacking Region super.img")
-        if not ok: raise RuntimeError("Region super.img unpack failed.")
-
-        bp = sorted(f for f in os.listdir(base_parts) if f.endswith(".img"))
+        print(f"[MERGE] Merging region partitions into base...")
         rp = sorted(f for f in os.listdir(region_parts) if f.endswith(".img"))
-
         replaced_count = 0
         added_count = 0
         skipped_count = 0
@@ -457,21 +451,15 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
         for fname, src_path in raw_sys_files:
             shutil.copy2(src_path, os.path.join(build_dir, fname))
 
-        print("[ZSTD] Compressing dynamic partitions with Maximum Ultra (level 19, multi-threaded -T0)...")
+        print(f"[ZSTD] Compressing dynamic partitions (level {level}, multi-threaded -T0)...")
         def compress_task(pf):
             src = os.path.join(base_parts, pf)
             dst = os.path.join(build_dir, pf + ".zst")
             env = os.environ.copy()
             env["PATH"] = BIN_DIR + os.pathsep + env.get("PATH", "")
-            # Level 19 Ultra compression with auto multi-threading -T0
-            cmd = [ZSTD_EXE, f"-{level}", "--ultra", "-T0", src, "-o", dst]
+            cmd = [ZSTD_EXE, f"-{level}", "-T0", src, "-o", dst]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, cwd=BIN_DIR)
             proc.wait()
-            if proc.returncode != 0:
-                # Fallback without --ultra if level < 19
-                cmd = [ZSTD_EXE, f"-{level}", "-T0", src, "-o", dst]
-                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env, cwd=BIN_DIR)
-                proc.wait()
             return proc.returncode == 0, pf
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, os.cpu_count() or 2)) as executor:
@@ -496,28 +484,16 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
         if os.path.isfile(zip_path):
             os.remove(zip_path)
 
-        print(f"[ZIP] Packaging flashable ZIP with maximum speed and compression...")
-        # Try native 7z multi-threaded zip compression first for maximum performance
-        packaged = False
-        try:
-            cmd = ["7z", "a", "-tzip", "-mx=9", "-mmt=on", zip_path, "."]
-            res = subprocess.run(cmd, cwd=build_dir, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if res.returncode == 0 and os.path.exists(zip_path):
-                print("[ZIP] Multi-threaded 7z ZIP compression completed successfully!")
-                packaged = True
-        except Exception:
-            packaged = False
-
-        if not packaged:
-            with zipfile.ZipFile(zip_path, 'w', allowZip64=True) as z:
-                for root_d, _, files in os.walk(build_dir):
-                    for fname in files:
-                        full = os.path.join(root_d, fname)
-                        rel = os.path.relpath(full, build_dir).replace(os.sep, '/')
-                        if fname.endswith('.zst'):
-                            z.write(full, rel, compress_type=zipfile.ZIP_STORED)
-                        else:
-                            z.write(full, rel, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+        print(f"[ZIP] Creating final flashable ZIP archive...")
+        with zipfile.ZipFile(zip_path, 'w', allowZip64=True) as z:
+            for root_d, _, files in os.walk(build_dir):
+                for fname in files:
+                    full = os.path.join(root_d, fname)
+                    rel = os.path.relpath(full, build_dir).replace(os.sep, '/')
+                    if fname.endswith('.zst'):
+                        z.write(full, rel, compress_type=zipfile.ZIP_STORED)
+                    else:
+                        z.write(full, rel, compress_type=zipfile.ZIP_DEFLATED, compresslevel=6)
 
         print(f"[SUCCESS] Flashable ROM Created Successfully: {zip_path}")
         return zip_path
