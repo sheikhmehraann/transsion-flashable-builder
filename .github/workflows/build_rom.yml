@@ -24,11 +24,12 @@ on:
         required: true
         type: string
       zstd_lvl:
-        description: 'Zstandard Compression Level (3 = Fast/Recommended 3-min, 6 = Balanced, 19 = Maximum Ultra)'
+        description: 'Zstandard Compression Level (1 = Ultra-Fast 10-sec, 3 = Recommended, 19 = Maximum Ultra)'
         required: false
-        default: '3'
+        default: '1'
         type: choice
         options:
+          - '1'
           - '3'
           - '6'
           - '19'
@@ -69,6 +70,7 @@ jobs:
         uses: actions/setup-python@v5.4.0
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Install System Dependencies & Set Binary Permissions
         run: |
@@ -81,7 +83,7 @@ jobs:
           python -m pip install --upgrade pip --quiet
           pip install --no-cache-dir gdown requests mega.py
 
-      - name: Download Stock ROM
+      - name: Multi-Mirror Speed Download Stock ROM
         env:
           NEEDROM_USER: ${{ inputs.needrom_user || secrets.NEEDROM_USER }}
           NEEDROM_PASS: ${{ inputs.needrom_pass || secrets.NEEDROM_PASS }}
@@ -89,16 +91,16 @@ jobs:
         run: |
           python download_rom.py "${{ inputs.rom_url }}" "work/stock_rom_archive" "${{ inputs.needrom_user }}" "${{ inputs.needrom_pass }}" "${{ inputs.needrom_cookie }}"
 
-      - name: Extract Stock ROM Archive
+      - name: Extract Stock ROM Archive (16-Thread Multi-Engine)
         run: |
           mkdir -p work/extracted_rom
-          7z x "work/stock_rom_archive" -owork/extracted_rom -y -mmt=on
+          7z x "work/stock_rom_archive" -owork/extracted_rom -y -mmt=16 -aoa
 
-      - name: Build Recovery Flashable ROM (Zstd Compression Level ${{ inputs.zstd_lvl || '3' }})
+      - name: Build Recovery Flashable ROM (Zstd Compression Level ${{ inputs.zstd_lvl || '1' }})
         run: |
-          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "${{ inputs.zstd_lvl || '3' }}"
+          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "${{ inputs.zstd_lvl || '1' }}"
 
-      - name: Upload Flashable ROM to GoFile
+      - name: Stream Upload Flashable ROM to GoFile
         env:
           GOFILE_TOKEN: ${{ inputs.gofile_token || secrets.GOFILE_TOKEN }}
         run: |
