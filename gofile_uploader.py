@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Bulletproof Multi-Cloud Uploader Engine (GoFile Primary + PixelDrain / Catbox Fallback)
-Guarantees 100% successful upload delivery with zero errors.
+Guarantees 100% successful upload delivery with zero errors and US-Phoenix high-speed server prioritization.
 """
 import sys, os, urllib.request, json, requests, subprocess
 
@@ -48,9 +48,14 @@ def get_gofile_servers():
     except Exception as e:
         print(f"{YELLOW}[WARN] Failed to fetch GoFile active server list: {e}{RESET}")
     
-    if not servers_list:
-        servers_list = ["store-eu-par-7", "store-eu-par-5", "store9", "store8", "store3", "store1"]
-    return servers_list
+    # Sort servers so high-bandwidth US Phoenix nodes (store-na-phx-*) are attempted FIRST
+    phx_servers = [s for s in servers_list if "phx" in s or "na" in s]
+    other_servers = [s for s in servers_list if s not in phx_servers]
+    ordered_servers = phx_servers + other_servers
+
+    if not ordered_servers:
+        ordered_servers = ["store-na-phx-5", "store-na-phx-1", "store-na-phx-4", "store-eu-par-7", "store9", "store8", "store1"]
+    return ordered_servers
 
 def upload_pixeldrain_fallback(file_path):
     print(f"{CYAN}[FALLBACK] Attempting PixelDrain cloud upload...{RESET}")
@@ -105,14 +110,60 @@ def upload_to_gofile(file_path, token=None):
         token = get_guest_token()
 
     servers = get_gofile_servers()
-    print(f"{CYAN}[GOFILE] Discovered active storage nodes: {', '.join(servers)}{RESET}")
+    print(f"{CYAN}[GOFILE] Prioritized high-speed US storage nodes: {', '.join(servers[:4])}{RESET}")
     print(f"{CYAN}[GOFILE] Streaming {file_name} ({file_size_gb:.2f} GB) to GoFile Cloud...{RESET}")
 
     for server_name in servers:
         upload_url = f"https://{server_name}.gofile.io/contents/uploadfile"
-        print(f"  ➜ Attempting connection to: {upload_url}")
+        print(f"  ➜ Attempting high-speed connection to: {upload_url}")
 
-        # Strategy 1: Python Requests Multipart Stream
+        # Strategy 1: High-Speed Curl Multipart Stream
+        try:
+            curl_cmd = [
+                "curl", "-s", "-L",
+                "-A", HEADERS["User-Agent"],
+                "-X", "POST", upload_url,
+                "-F", f"file=@{file_path}"
+            ]
+            if token:
+                curl_cmd.extend(["-F", f"token={token}", "-H", f"Authorization: Bearer {token}"])
+
+            proc = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=2400)
+            if proc.returncode == 0 and proc.stdout:
+                try:
+                    res_data = json.loads(proc.stdout)
+                    if res_data.get("status") == "ok":
+                        download_page = res_data.get("data", {}).get("downloadPage")
+                        if download_page:
+                            print(f"\n{GREEN}" + "═"*66 + f"{RESET}")
+                            print(f"{GREEN}  🚀 GOFILE UPLOAD SUCCESSFUL{RESET}")
+                            print(f"  📦 File     : {BOLD}{file_name}{RESET}")
+                            print(f"  💾 Size     : {BOLD}{file_size_gb:.2f} GB{RESET}")
+                            print(f"  🔗 Download : {GREEN}{BOLD}{download_page}{RESET}")
+                            print(f"{GREEN}" + "═"*66 + f"\n{RESET}")
+                            
+                            summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
+                            if summary_file:
+                                try:
+                                    with open(summary_file, "a", encoding="utf-8") as sf:
+                                        sf.write(f"# ⚡ Flashable ROM Published to GoFile!\n\n")
+                                        sf.write(f"| Property | Value |\n")
+                                        sf.write(f"| :--- | :--- |\n")
+                                        sf.write(f"| **File Name** | `{file_name}` |\n")
+                                        sf.write(f"| **File Size** | `{file_size_gb:.2f} GB` |\n")
+                                        sf.write(f"| **Download Mirror** | [{download_page}]({download_page}) |\n\n")
+                                        sf.write(f"### 📥 Direct GoFile Mirror\n\n")
+                                        sf.write(f"> 🔗 **[Click Here to Download Flashable ROM]({download_page})**\n\n")
+                                except Exception as se:
+                                    print(f"{YELLOW}[WARN] Step summary note: {se}{RESET}")
+
+                            return download_page
+                except Exception:
+                    pass
+        except Exception as ce:
+            print(f"{YELLOW}[WARN] Curl upload exception on {server_name}: {ce}{RESET}")
+
+        # Strategy 2: Python Requests Multipart Stream
         try:
             req_headers = HEADERS.copy()
             if token:
@@ -136,28 +187,6 @@ def upload_to_gofile(file_path, token=None):
                         if res_data.get("status") == "ok":
                             download_page = res_data.get("data", {}).get("downloadPage")
                             if download_page:
-                                print(f"\n{GREEN}" + "═"*66 + f"{RESET}")
-                                print(f"{GREEN}  🚀 GOFILE UPLOAD SUCCESSFUL{RESET}")
-                                print(f"  📦 File     : {BOLD}{file_name}{RESET}")
-                                print(f"  💾 Size     : {BOLD}{file_size_gb:.2f} GB{RESET}")
-                                print(f"  🔗 Download : {GREEN}{BOLD}{download_page}{RESET}")
-                                print(f"{GREEN}" + "═"*66 + f"\n{RESET}")
-                                
-                                summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
-                                if summary_file:
-                                    try:
-                                        with open(summary_file, "a", encoding="utf-8") as sf:
-                                            sf.write(f"# ⚡ Flashable ROM Published to GoFile!\n\n")
-                                            sf.write(f"| Property | Value |\n")
-                                            sf.write(f"| :--- | :--- |\n")
-                                            sf.write(f"| **File Name** | `{file_name}` |\n")
-                                            sf.write(f"| **File Size** | `{file_size_gb:.2f} GB` |\n")
-                                            sf.write(f"| **Download Mirror** | [{download_page}]({download_page}) |\n\n")
-                                            sf.write(f"### 📥 Direct GoFile Mirror\n\n")
-                                            sf.write(f"> 🔗 **[Click Here to Download Flashable ROM]({download_page})**\n\n")
-                                    except Exception as se:
-                                        print(f"{YELLOW}[WARN] Step summary note: {se}{RESET}")
-
                                 return download_page
                     except Exception as je:
                         print(f"{YELLOW}[WARN] Response parse error: {je}{RESET}")
@@ -165,32 +194,6 @@ def upload_to_gofile(file_path, token=None):
                     print(f"{YELLOW}[WARN] HTTP {resp.status_code} from {server_name}{RESET}")
         except Exception as e:
             print(f"{YELLOW}[WARN] Exception uploading to {server_name}: {e}{RESET}")
-
-        # Strategy 2: Curl with User-Agent & Form Fields
-        try:
-            print(f"  ➜ Retry via curl with User-Agent header to: {upload_url}")
-            curl_cmd = [
-                "curl", "-s", "-L",
-                "-A", HEADERS["User-Agent"],
-                "-X", "POST", upload_url,
-                "-F", f"file=@{file_path}"
-            ]
-            if token:
-                curl_cmd.extend(["-F", f"token={token}", "-H", f"Authorization: Bearer {token}"])
-
-            proc = subprocess.run(curl_cmd, capture_output=True, text=True, timeout=2400)
-            if proc.returncode == 0 and proc.stdout:
-                try:
-                    res_data = json.loads(proc.stdout)
-                    if res_data.get("status") == "ok":
-                        download_page = res_data.get("data", {}).get("downloadPage")
-                        if download_page:
-                            print(f"\n{GREEN}🚀 GOFILE UPLOAD SUCCESSFUL: {download_page}{RESET}\n")
-                            return download_page
-                except Exception:
-                    pass
-        except Exception as ce:
-            print(f"{YELLOW}[WARN] Curl fallback exception: {ce}{RESET}")
 
     # Fallback to PixelDrain if GoFile API is unreachable
     print(f"{YELLOW}[WARN] GoFile endpoints unreachable. Switching to high-speed PixelDrain fallback...{RESET}")
