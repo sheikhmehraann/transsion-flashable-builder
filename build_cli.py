@@ -501,6 +501,12 @@ def build_rom_cli(base_dir, out_dir, device, codename, fw_ver, region_name=None,
         shutil.rmtree(temp_root, ignore_errors=True)
 
 def main():
+    print(r"""
+========================================================================
+             TRANSSION FLASHABLE ROM BUILDER ENGINE v2.0
+               High-Performance A/B Dual-Slot Pipeline
+========================================================================
+""")
     parser = argparse.ArgumentParser(description="Transsion Flashable ROM Builder CLI")
     parser.add_argument("--base-dir", required=True, help="Path to extracted stock ROM directory")
     parser.add_argument("--out-dir", required=True, help="Directory to save final recovery zip")

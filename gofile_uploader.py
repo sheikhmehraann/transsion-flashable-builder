@@ -1,9 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-High-Speed GoFile Uploader for GitHub Actions / CLI
-Uploads flashable ROM ZIP to GoFile via dynamic server resolution API.
+High-Speed GoFile Uploader Engine for GitHub Actions & CLI
+Uploads flashable ROM ZIPs to GoFile via dynamic server resolution API.
 """
 import sys, os, urllib.request, json, subprocess
+
+CYAN = "\033[1;36m"
+GREEN = "\033[1;32m"
+YELLOW = "\033[1;33m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
 
 def get_gofile_servers():
     servers_list = []
@@ -17,10 +23,10 @@ def get_gofile_servers():
                     if s.get("name"):
                         servers_list.append(s["name"])
     except Exception as e:
-        print(f"[WARN] Failed to get GoFile server list: {e}")
+        print(f"{YELLOW}[WARN] Failed to fetch GoFile active server list: {e}{RESET}")
     
     if not servers_list:
-        servers_list = ["store-eu-par-5", "store-eu-par-7", "store1", "store3", "store5"]
+        servers_list = ["store-eu-par-7", "store-eu-par-5", "store9", "store8", "store3", "store1"]
     return servers_list
 
 def upload_to_gofile(file_path, token=None):
@@ -32,8 +38,8 @@ def upload_to_gofile(file_path, token=None):
     file_name = os.path.basename(file_path)
     
     servers = get_gofile_servers()
-    print(f"[GOFILE] Discovered active servers: {', '.join(servers[:4])}")
-    print(f"[GOFILE] Uploading {file_name} ({file_size_gb:.2f} GB) to GoFile...")
+    print(f"{CYAN}[GOFILE] Discovered active storage nodes: {', '.join(servers[:4])}{RESET}")
+    print(f"{CYAN}[GOFILE] Streaming {file_name} ({file_size_gb:.2f} GB) to GoFile Cloud...{RESET}")
 
     for server_name in servers[:4]:
         upload_urls = [
@@ -42,7 +48,7 @@ def upload_to_gofile(file_path, token=None):
         ]
 
         for url in upload_urls:
-            print(f"[GOFILE] Attempting upload to: {url}")
+            print(f"  ➜ Attempting connection to: {url}")
             cmd = ["curl", "-s", "-X", "POST", url, "-F", f"file=@{file_path}"]
             if token:
                 cmd.extend(["-H", f"Authorization: Bearer {token}"])
@@ -55,35 +61,36 @@ def upload_to_gofile(file_path, token=None):
                         if res_data.get("status") == "ok":
                             download_page = res_data.get("data", {}).get("downloadPage")
                             if download_page:
-                                print(f"\n" + "═"*64)
-                                print(f"  🚀 GOFILE UPLOAD SUCCESSFUL")
-                                print(f"  📦 File     : {file_name}")
-                                print(f"  💾 Size     : {file_size_gb:.2f} GB")
-                                print(f"  🔗 Download : {download_page}")
-                                print("═"*64 + "\n")
+                                print(f"\n{GREEN}" + "═"*66 + f"{RESET}")
+                                print(f"{GREEN}  🚀 GOFILE UPLOAD SUCCESSFUL{RESET}")
+                                print(f"  📦 File     : {BOLD}{file_name}{RESET}")
+                                print(f"  💾 Size     : {BOLD}{file_size_gb:.2f} GB{RESET}")
+                                print(f"  🔗 Download : {GREEN}{BOLD}{download_page}{RESET}")
+                                print(f"{GREEN}" + "═"*66 + f"\n{RESET}")
                                 
-                                # Generate GitHub Actions Step Summary if available
+                                # Generate GitHub Actions Step Summary
                                 summary_file = os.environ.get("GITHUB_STEP_SUMMARY")
                                 if summary_file:
                                     try:
                                         with open(summary_file, "a", encoding="utf-8") as sf:
-                                            sf.write(f"## ⚡ Flashable ROM Ready on GoFile!\n\n")
+                                            sf.write(f"# ⚡ Flashable ROM Published to GoFile!\n\n")
                                             sf.write(f"| Property | Value |\n")
                                             sf.write(f"| :--- | :--- |\n")
                                             sf.write(f"| **File Name** | `{file_name}` |\n")
                                             sf.write(f"| **File Size** | `{file_size_gb:.2f} GB` |\n")
-                                            sf.write(f"| **Download Link** | [{download_page}]({download_page}) |\n\n")
-                                            sf.write(f"> 🔗 **Direct GoFile Download:** [{download_page}]({download_page})\n")
+                                            sf.write(f"| **Download Mirror** | [{download_page}]({download_page}) |\n\n")
+                                            sf.write(f"### 📥 Direct GoFile Mirror\n\n")
+                                            sf.write(f"> 🔗 **[Click Here to Download Flashable ROM]({download_page})**\n\n")
                                     except Exception as se:
-                                        print(f"[WARN] Failed to write step summary: {se}")
+                                        print(f"{YELLOW}[WARN] Failed to write step summary: {se}{RESET}")
 
                                 return download_page
                     except json.JSONDecodeError:
-                        print(f"[WARN] Non-JSON response from {url}: {proc.stdout[:150]}")
+                        print(f"{YELLOW}[WARN] Non-JSON response from {url}{RESET}")
                 else:
-                    print(f"[WARN] Curl exit code {proc.returncode} for {url}")
+                    print(f"{YELLOW}[WARN] Connection retry for {url}{RESET}")
             except Exception as e:
-                print(f"[WARN] Upload error for {url}: {e}")
+                print(f"{YELLOW}[WARN] Upload exception for {url}: {e}{RESET}")
 
     return None
 
@@ -97,7 +104,7 @@ def main():
 
     link = upload_to_gofile(filepath, token)
     if not link:
-        print("[ERR] GoFile upload failed across all endpoints.")
+        print(f"[ERR] GoFile upload failed across all endpoints.")
         sys.exit(1)
 
 if __name__ == "__main__":
