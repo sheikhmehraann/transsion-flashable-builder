@@ -94,7 +94,24 @@ jobs:
         run: |
           python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "${{ inputs.zstd_lvl || '3' }}"
 
-      - name: Create GitHub Release & Upload ROM Package
+      - name: Prepare Multi-Part Release Chunks for GitHub (Under 2GB API Limit)
+        run: |
+          mkdir -p release_chunks
+          ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
+          ZIP_NAME=$(basename "$ZIP_FILE")
+          echo "Splitting $ZIP_NAME into 1900MB parts for GitHub Release..."
+          split -d -b 1900M "$ZIP_FILE" "release_chunks/${ZIP_NAME}.part"
+
+      - name: Upload Single Full ROM to GoFile Mirror
+        env:
+          GOFILE_TOKEN: ${{ inputs.gofile_token || secrets.GOFILE_TOKEN }}
+        run: |
+          ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ]; then
+              python gofile_uploader.py "$ZIP_FILE" "${GOFILE_TOKEN}" || true
+          fi
+
+      - name: Create GitHub Release & Upload Multi-Part Package
         uses: softprops/action-gh-release@v2
         with:
           tag_name: rom-${{ inputs.codename }}-${{ github.run_number }}
@@ -106,13 +123,9 @@ jobs:
             - **Firmware Version**: `${{ inputs.fw_version }}`
             - **Region**: `${{ inputs.region }}`
             - **Build Status**: `✓ 100% Complete`
-          files: output/*.zip
-
-      - name: Upload Flashable ROM to GoFile Mirror
-        env:
-          GOFILE_TOKEN: ${{ inputs.gofile_token || secrets.GOFILE_TOKEN }}
-        run: |
-          ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
-          if [ -n "$ZIP_FILE" ]; then
-              python gofile_uploader.py "$ZIP_FILE" "${GOFILE_TOKEN}" || true
-          fi
+            
+            ### 📦 How to Reassemble Parts (GitHub Releases)
+            - **Linux / Android / Termux**: `cat *.part* > ROM.zip`
+            - **Windows Command Prompt**: `copy /b *.part* ROM.zip`
+            - **7-Zip / WinRAR**: Right click `.part00` -> Extract Here.
+          files: release_chunks/*.part*
