@@ -64,11 +64,11 @@ def download_sourceforge(url, dest_path):
         match = re.search(r'sourceforge\.net/projects/([^/]+)/files/(.+?)(?:/download)?(?:\?.*)?$', url)
         if match:
             project, file_path = match.group(1), match.group(2)
-            direct_url = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=master"
+            direct_url = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=fastly"
         else:
-            direct_url = url if "use_mirror=" in url else f"{url}?use_mirror=master"
+            direct_url = url if "use_mirror=" in url else f"{url}?use_mirror=fastly"
 
-        print(f"[DOWNLOAD] Direct SourceForge master mirror URL: {direct_url}")
+        print(f"[DOWNLOAD] Fastly SourceForge Mirror URL: {direct_url}")
         return download_direct(direct_url, dest_path)
     return False
 
@@ -256,18 +256,44 @@ def download_direct(url, dest_path, session=None, headers=None):
         print("[WARN] Skipping direct curl/aria2 download for Google Drive URL.")
         return False
 
-    print(f"[DOWNLOAD] Streaming download from: {url}")
-    ua = "curl/7.88.1" if "sourceforge.net" in url else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     
-    # Try aria2c first for multi-connection speed if available
+    # Resolve 302 redirects first to obtain final direct CDN domain
+    target_url = url
+    try:
+        req_headers = {"User-Agent": ua}
+        if headers:
+            req_headers.update(headers)
+        r = requests.head(url, headers=req_headers, allow_redirects=True, timeout=10)
+        if r.url:
+            target_url = r.url
+            print(f"[DOWNLOAD] Resolved direct CDN endpoint: {target_url}")
+    except Exception:
+        pass
+
+    print(f"[DOWNLOAD] Streaming download from: {target_url}")
+
+    # Try aria2c first for 16-thread multi-connection gigabit speed
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
-        cmd = ["aria2c", "-x", "16", "-s", "16", f"--user-agent={ua}", "-o", os.path.basename(dest_path), "-d", os.path.dirname(dest_path)]
+        cmd = [
+            "aria2c",
+            "-x", "16",
+            "-s", "16",
+            "-k", "1M",
+            "--file-allocation=none",
+            "--summary-interval=5",
+            "--console-log-level=notice",
+            f"--user-agent={ua}",
+            "-o", os.path.basename(dest_path),
+            "-d", os.path.dirname(dest_path)
+        ]
         if headers and "Cookie" in headers:
             cmd.extend(["--header", f"Cookie: {headers['Cookie']}"])
-        cmd.append(url)
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd.append(target_url)
+
+        res = subprocess.run(cmd)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
             return True
         if os.path.exists(dest_path):
@@ -279,11 +305,11 @@ def download_direct(url, dest_path, session=None, headers=None):
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
-        cmd = ["curl", "-s", "-L", "-A", ua, "-o", dest_path]
+        cmd = ["curl", "-L", "-A", ua, "-o", dest_path]
         if headers and "Cookie" in headers:
             cmd.extend(["-H", f"Cookie: {headers['Cookie']}"])
-        cmd.append(url)
-        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd.append(target_url)
+        res = subprocess.run(cmd)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
             return True
         if os.path.exists(dest_path):
@@ -300,12 +326,12 @@ def download_direct(url, dest_path, session=None, headers=None):
             req_headers.update(headers)
         
         req_session = session if session else requests.Session()
-        resp = req_session.get(url, headers=req_headers, allow_redirects=True, stream=True, timeout=30)
+        resp = req_session.get(target_url, headers=req_headers, allow_redirects=True, stream=True, timeout=30)
         if resp.status_code in (200, 206):
             total_len = int(resp.headers.get('content-length', 0))
             dl = 0
             with open(dest_path, 'wb') as out_file:
-                for chunk in resp.iter_content(chunk_size=2 * 1024 * 1024):
+                for chunk in resp.iter_content(chunk_size=4 * 1024 * 1024):
                     if chunk:
                         out_file.write(chunk)
                         dl += len(chunk)
