@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Universal High-Speed ROM Downloader Engine
-Supports: SourceForge, Needrom, Google Drive (Virus Bypass), Mega.nz, PixelDrain, GoFile, MediaFire, 1Fichier, Terabox, and Direct HTTP/HTTPS URLs.
+Universal High-Speed Multi-Mirror ROM Downloader Engine
+Supports: SourceForge (Multi-Mirror Parallel Engine), Needrom, Google Drive (Virus Bypass), Mega.nz, PixelDrain, GoFile, MediaFire, 1Fichier, Terabox, and Direct HTTP/HTTPS URLs.
 """
 import sys, os, re, subprocess, urllib.request, json, requests, html
 
@@ -69,31 +69,43 @@ def download_pixeldrain(url, dest_path):
 
 def download_sourceforge(url, dest_path):
     if "sourceforge.net" in url:
-        print(f"[DOWNLOAD] SourceForge link detected: {url}")
+        print(f"[DOWNLOAD] SourceForge multi-mirror link detected: {url}")
         match = re.search(r'sourceforge\.net/projects/([^/]+)/files/(.+?)(?:/download)?(?:\?.*)?$', url)
         if match:
             project, file_path = match.group(1), match.group(2)
-            base_url = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=autoselect"
+            
+            # Construct multi-mirror URLs for simultaneous multi-socket aria2c parallel streaming
+            mirrors = ["fastly", "netcologne", "nchc", "heanet", "autoselect"]
+            mirror_urls = [
+                f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror={m}"
+                for m in mirrors
+            ]
+            print(f"[SF] Parallel high-speed mirrors: {', '.join(mirrors)}")
+
+            # Try resolving signed CDN URLs for mirrors
+            resolved_urls = []
+            for mu in mirror_urls[:3]:
+                try:
+                    res = subprocess.run(
+                        ["curl", "-s", "-I", "-A", UA_CURL, mu],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    for line in res.stdout.splitlines():
+                        if line.lower().startswith("location:"):
+                            loc = line.split(":", 1)[1].strip()
+                            if loc and loc not in resolved_urls:
+                                resolved_urls.append(loc)
+                            break
+                except Exception:
+                    pass
+
+            if not resolved_urls:
+                resolved_urls = mirror_urls
+
+            print(f"[SF] Streaming {len(resolved_urls)} parallel CDN endpoints simultaneously...")
+            return download_direct_multi(resolved_urls, dest_path)
         else:
-            base_url = url if "use_mirror=" in url else f"{url}?use_mirror=autoselect"
-
-        print(f"[SF] Requesting signed mirror location for: {base_url}")
-        
-        signed_cdn_url = base_url
-        try:
-            res = subprocess.run(
-                ["curl", "-s", "-I", "-A", UA_CURL, base_url],
-                capture_output=True, text=True, timeout=15
-            )
-            for line in res.stdout.splitlines():
-                if line.lower().startswith("location:"):
-                    signed_cdn_url = line.split(":", 1)[1].strip()
-                    print(f"[SF] Successfully extracted signed CDN URL: {signed_cdn_url}")
-                    break
-        except Exception as e:
-            print(f"[WARN] Signed CDN URL extraction note: {e}")
-
-        return download_direct(signed_cdn_url, dest_path)
+            return download_direct(url, dest_path)
     return False
 
 def download_gofile(url, dest_path):
@@ -130,7 +142,6 @@ def download_gdrive(url, dest_path):
     elif len(url.strip()) >= 25 and '/' not in url.strip():
         file_id = url.strip()
 
-    # Strategy 1: gdown library
     try:
         subprocess.run([sys.executable, "-m", "pip", "install", "gdown"], check=True)
         import gdown
@@ -146,7 +157,6 @@ def download_gdrive(url, dest_path):
     except Exception as e:
         print(f"[GDRIVE] Strategy 1 (gdown) failed: {e}")
 
-    # Strategy 2: Direct Virus Warning Form Bypass Engine
     if file_id:
         print(f"[GDRIVE] Strategy 2: Form-based Virus Warning Bypass Engine for ID: {file_id}...")
         try:
@@ -271,6 +281,34 @@ def download_needrom(url, dest_path, user=None, password=None, cookie=None):
         print(f"[ERR] Needrom page download handler failed: {e}")
         return download_direct(url, dest_path)
 
+def download_direct_multi(urls, dest_path):
+    safe_remove(dest_path)
+    ua = UA_BROWSER
+    try:
+        cmd = [
+            "aria2c",
+            "-x", "16",
+            "-s", "16",
+            "-j", "16",
+            "-k", "1M",
+            "--file-allocation=none",
+            "--summary-interval=3",
+            f"--user-agent={ua}",
+            "-o", os.path.basename(dest_path),
+            "-d", os.path.dirname(dest_path)
+        ] + urls
+
+        res = subprocess.run(cmd)
+        if res.returncode == 0 and is_valid_rom_file(dest_path):
+            print("[DOWNLOAD] Multi-mirror parallel speed download succeeded!")
+            return True
+        safe_remove(dest_path)
+    except FileNotFoundError:
+        pass
+
+    # Fallback to single direct download
+    return download_direct(urls[0], dest_path)
+
 def download_direct(url, dest_path, session=None, headers=None):
     if "drive.google.com" in url or "drive.usercontent.google.com" in url:
         print("[WARN] Skipping direct curl/aria2 download for Google Drive URL.")
@@ -362,7 +400,7 @@ def main():
     cookie = sys.argv[5].strip() if len(sys.argv) > 5 and sys.argv[5].strip() else None
 
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    print(f"[DOWNLOAD] Initializing high-speed downloader engine for: {url}")
+    print(f"[DOWNLOAD] Initializing multi-mirror high-speed downloader engine for: {url}")
 
     if download_needrom(url, dest, user, password, cookie):
         print("[DOWNLOAD] SUCCESS!")
