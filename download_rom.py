@@ -64,15 +64,18 @@ def download_sourceforge(url, dest_path):
     if "sourceforge.net" in url:
         print(f"[DOWNLOAD] SourceForge link detected: {url}")
         
-        # Clean target URL
-        if "/files/" in url and not url.endswith("/download"):
-            target_url = url.split('?')[0].rstrip('/') + "/download"
-        else:
-            target_url = url.split('?')[0]
+        # Resolve real redirect URL first via requests
+        ua = UA_BROWSER
+        target_url = url
+        try:
+            r = requests.head(url, headers={"User-Agent": ua}, allow_redirects=True, timeout=15)
+            if r.url and "sourceforge.net" in r.url:
+                target_url = r.url
+                print(f"[DOWNLOAD] Resolved direct SourceForge CDN URL: {target_url}")
+        except Exception as e:
+            print(f"[WARN] Redirect resolution note: {e}")
 
-        print(f"[DOWNLOAD] Target SourceForge download URL: {target_url}")
-
-        # Strategy 1: High-Speed multi-connection aria2c with browser User-Agent & follow-redirects
+        # Strategy 1: High-Speed multi-connection aria2c
         try:
             if os.path.exists(dest_path):
                 os.remove(dest_path)
@@ -81,12 +84,11 @@ def download_sourceforge(url, dest_path):
                 "-x", "16",
                 "-s", "16",
                 "-k", "1M",
-                "-L",
                 "--max-tries=5",
                 "--retry-wait=2",
                 "--file-allocation=none",
                 "--summary-interval=5",
-                f"--user-agent={UA_BROWSER}",
+                f"--user-agent={ua}",
                 "-o", os.path.basename(dest_path),
                 "-d", os.path.dirname(dest_path),
                 target_url
@@ -104,7 +106,7 @@ def download_sourceforge(url, dest_path):
         try:
             if os.path.exists(dest_path):
                 os.remove(dest_path)
-            cmd = ["curl", "-s", "-L", "-A", UA_BROWSER, "-o", dest_path, target_url]
+            cmd = ["curl", "-s", "-L", "-A", ua, "-o", dest_path, target_url]
             res = subprocess.run(cmd)
             if res.returncode == 0 and is_valid_rom_file(dest_path):
                 print("[DOWNLOAD] SourceForge curl download succeeded!")
@@ -119,7 +121,7 @@ def download_sourceforge(url, dest_path):
             if os.path.exists(dest_path):
                 os.remove(dest_path)
             session = requests.Session()
-            session.headers.update({"User-Agent": UA_BROWSER})
+            session.headers.update({"User-Agent": ua})
             resp = session.get(target_url, allow_redirects=True, stream=True, timeout=30)
             if resp.status_code in (200, 206):
                 total_len = int(resp.headers.get('content-length', 0))
@@ -334,7 +336,6 @@ def download_direct(url, dest_path, session=None, headers=None):
             "-x", "16",
             "-s", "16",
             "-k", "1M",
-            "-L",
             "--max-tries=5",
             "--file-allocation=none",
             "--summary-interval=5",
