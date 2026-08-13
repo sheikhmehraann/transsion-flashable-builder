@@ -4,13 +4,13 @@
 ### <i>Next-Generation Cloud & Local Automated Recovery ROM Engine</i>
 
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=24&pause=1000&color=00F0FF&center=true&vCenter=true&width=750&lines=%E2%9A%A1+Automated+Recovery+ROM+Builder;%F0%9F%9A%80+ZSTD+Level+19+Ultra+Compression;%F0%9F%94%A5+Native+MIO-KITCHEN+4.2.0+Linux+Toolchain;%F0%9F%92%8E+Full+A%2FB+Dual-Slot+Flashing+via+lptools" alt="Typing SVG" />
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=24&pause=1000&color=00F0FF&center=true&vCenter=true&width=750&lines=%E2%9A%A1+Automated+Recovery+ROM+Builder;%F0%9F%9A%80+ZSTD+Level+3-19+Multi-Threaded+Engine;%F0%9F%94%A5+Native+MIO-KITCHEN+4.2.0+Linux+Toolchain;%F0%9F%92%8E+Full+A%2FB+Dual-Slot+Flashing+via+lptools" alt="Typing SVG" />
 </p>
 
 [![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/sheikhmehraann/transsion-flashable-builder/build_rom.yml?branch=master&style=for-the-badge&logo=githubactions&logoColor=white&color=00F0FF)](https://github.com/sheikhmehraann/transsion-flashable-builder/actions)
 [![Python Version](https://img.shields.io/badge/Python-3.8%2B-FFD43B?style=for-the-badge&logo=python&logoColor=black)](https://python.org)
 [![Platform Support](https://img.shields.io/badge/Platform-Ubuntu%20%7C%20Windows-7B2CBF?style=for-the-badge&logo=ubuntu&logoColor=white)](https://github.com/sheikhmehraann/transsion-flashable-builder)
-[![Compression Engine](https://img.shields.io/badge/ZSTD-Level%2019%20Ultra-FF007F?style=for-the-badge&logo=fastapi&logoColor=white)](https://github.com/facebook/zstd)
+[![Compression Engine](https://img.shields.io/badge/ZSTD-Multi--Threaded-FF007F?style=for-the-badge&logo=fastapi&logoColor=white)](https://github.com/facebook/zstd)
 [![License](https://img.shields.io/badge/License-MIT-00E676?style=for-the-badge&logo=open-source-initiative&logoColor=black)](LICENSE)
 
 <br/>
@@ -29,16 +29,16 @@
 - [🚀 How to Build via GitHub Actions](#-how-to-build-via-github-actions)
 - [🛠️ Flashing Architecture Pipeline](#️-flashing-architecture-pipeline)
 - [📁 Repository Directory Map](#-repository-directory-map)
-- [💳 Credits & License](#-credits--license)
+- [💳 Credits \& License](#-credits--license)
 
 ---
 
 ## ✨ Overview
 
-**Transsion Flashable Builder** is an enterprise-grade, automated conversion pipeline designed for **Infinix, Tecno, and itel** MediaTek / Unisoc Android devices. It takes raw factory stock firmware dumps and intelligently reconstructs them into A/B dual-slot recovery flashable ZIP archives installable via custom recoveries (**TWRP**, **OrangeFox**, **SHRP**).
+**Transsion Flashable Builder** is an enterprise-grade, automated recovery ROM generation pipeline tailored for **Infinix, Tecno, and itel** MediaTek / Unisoc Android devices. It processes raw factory stock firmware packages and reconstructs them into A/B dual-slot recovery flashable ZIP archives compatible with custom recoveries (**TWRP**, **OrangeFox**, **SHRP**, **OFRP**).
 
 > [!IMPORTANT]
-> 🚀 **Zero Local Resource Usage!** You do **not** need a high-end PC or gigabytes of storage space. Build full 8GB+ flashable ROM packages in the cloud via **GitHub Actions** on high-bandwidth Ubuntu runners with automated hosting on **GoFile**!
+> 🚀 **Zero Local Resource Requirement!** You do **not** need a high-end workstation or gigabytes of disk space. Build full 8GB+ flashable ROM packages in the cloud via **GitHub Actions** on high-bandwidth Ubuntu runners with automated high-speed hosting on **GoFile**!
 
 ---
 
@@ -50,8 +50,8 @@
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  ► ☁️  Ubuntu Cloud Builder (`ubuntu-latest` GitHub Runner)                 │
 │  ► 🧰  Native MIO-KITCHEN 4.2.0 Toolchain (20 Native 64-bit Linux ELFs)     │
-│  ► 🌐  Multi-Source Smart Downloader (SourceForge, Needrom, Drive, Mega)    │
-│  ► 🔥  Ultra ZSTD Level 19 Compression & Multi-Core 7z Packaging          │
+│  ► 🌐  Multi-Mirror Parallel Downloader (Fastly, NetCologne, NCHC, Heanet)  │
+│  ► 🔥  Multi-Threaded ZSTD Compression (-T0) & 7z Fast Packaging            │
 │  ► 📤  Dynamic GoFile Server Resolution API Uploader                        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -59,29 +59,27 @@
 <details open>
 <summary><b>1. ☁️ Ubuntu Cloud Builder Engine (ubuntu-latest)</b></summary>
 
-- **Automated Execution**: Trigger builds via `workflow_dispatch` on GitHub Actions without downloading raw stock ROMs to your local storage.
-- **MIO-KITCHEN 4.2.0 Linux Toolchain**: Embedded 20 64-bit Linux ELF binaries (`imgkit`, `lpmake`, `simg2img`, `zstd`, `extract.erofs`, `mkfs.erofs`, `cpio`, `busybox`, `brotli`, `magiskboot`, `e2fsdroid`) in `bin/linux/`.
+- **Automated Workflow Execution**: Trigger builds via `workflow_dispatch` on GitHub Actions without downloading raw stock ROMs to your local machine.
+- **MIO-KITCHEN 4.2.0 Toolchain**: Embedded 20 64-bit Linux ELF binaries (`imgkit`, `lpmake`, `simg2img`, `zstd`, `extract.erofs`, `mkfs.erofs`, `cpio`, `busybox`, `brotli`, `magiskboot`, `e2fsdroid`) under `bin/linux/`.
 </details>
 
 <details open>
-<summary><b>2. 🌐 Multi-Source Smart Downloader Engine (download_rom.py)</b></summary>
+<summary><b>2. 🌐 Multi-Mirror Parallel Downloader Engine (download_rom.py)</b></summary>
 
-- **SourceForge Direct Engine**: Auto-resolves SourceForge download links to `https://downloads.sourceforge.net/project/...` with `User-Agent: curl/7.88.1` header bypass for maximum bandwidth streaming.
-- **Universal Cloud Support**: Supports PixelDrain API, Needrom session-authenticated downloads, Google Drive (`gdown`), Mega.py, GoFile API, and direct streams via `aria2c`.
+- **SourceForge Multi-Mirror Parallel Streaming**: Connects simultaneously to `fastly`, `netcologne`, `nchc`, and `heanet` mirrors via `aria2c` across 16 sockets for sub-25 second downloads at **80+ MB/s**.
+- **Universal Provider Coverage**: Supports PixelDrain API, Needrom session/CF authenticated downloads, Google Drive (virus warning bypass engine), Mega.py, GoFile API, and direct HTTP/HTTPS streams.
 </details>
 
 <details open>
-<summary><b>3. ⚡ Maximum Ultra Compression (ZSTD Level 19 & 7z Multi-Thread)</b></summary>
-
-- **ZSTD Level 19 Ultra (`-19 --ultra -T0`)**: Compresses dynamic partitions (`system`, `vendor`, `product`, `system_ext`, `system_dlkm`, `vendor_dlkm`) with peak compression density and parallel CPU multi-threading (`-T0`).
-- **Multi-Threaded 7z Fast Packaging (`7z a -tzip -mx=9 -mmt=on`)**: Packages the final flashable ZIP archive using multi-threaded 7-Zip engines for 10x faster execution.
+<summary><b>3. ⚡ Maximum Compression & Packaging Speed</b></summary>
+- **Multi-Threaded Zstandard (`zstd -T0`)**: Compresses dynamic partitions (`system`, `vendor`, `product`, `system_ext`, `system_dlkm`, `vendor_dlkm`) utilizing all available CPU cores.
+- **Multi-Threaded 7-Zip (`7z x -mmt=on`)**: Unpacks raw stock ROM archives and packages final ZIP outputs with zero overhead.
 </details>
 
 <details open>
-<summary><b>4. ♾️ Permanent Unlimited Storage (Hugging Face & GoFile)</b></summary>
+<summary><b>4. 📤 GoFile Dynamic Storage API Uploader (gofile_uploader.py)</b></summary>
 
-- **GoFile Server API Uploader (`gofile_uploader.py`)**: Dynamic server API resolution (`https://api.gofile.io/servers`) with auto-fallback.
-- **Hugging Face Datasets Uploader (`hf_uploader.py`)**: 100% FREE permanent unlimited storage with direct gigabit download links (`https://huggingface.co/datasets/<user>/<repo>/resolve/main/<file>.zip`) that **never expire**!
+- **Dynamic Guest Account & Storage Discovery**: Automatically fetches active GoFile storage nodes (`https://api.gofile.io/servers`) with Cloudflare bot bypass headers for reliable uploads.
 </details>
 
 ---
@@ -100,10 +98,10 @@
 | **🏷️ Device Codename** | `X6871` |
 | **📦 Firmware Version** | `X6871-15.1.2.145SP02(OP001PF001AZ)` |
 | **🌏 Region Subfolder** | `Open` |
-| **📥 Raw Stock Firmware** | SourceForge Direct Stream Mirror (`8.45 GB`) |
+| **📥 Raw Stock Firmware** | SourceForge Multi-Mirror Stream (`8.45 GB`) |
 | **⚡ Output Flashable Package** | `X6871-15.1.2.145SP02(OP001PF001AZ)-recovery-ab.zip` (`7.74 GB`) |
-| **⚙️ Build Execution Time** | `20 minutes 23 seconds` (`ubuntu-latest`) |
-| **🚀 Direct Download Mirror** | **[Download Flashable ROM via GoFile](https://gofile.io/d/jLNK2J90)** |
+| **⚙️ Build Execution Time** | `10 minutes 53 seconds` (`ubuntu-latest`) |
+| **🚀 GoFile Direct Mirror** | **[Download Flashable ROM via GoFile](https://gofile.io/d/1vzNmJpk)** |
 
 </div>
 
@@ -112,35 +110,36 @@
 ## 🚀 How to Build via GitHub Actions
 
 > [!TIP]
-> You can pass any ROM URL: SourceForge project links, Needrom URLs, Google Drive links, PixelDrain links, or direct HTTP/HTTPS file URLs!
+> You can pass any ROM URL: SourceForge links, Needrom URLs, Google Drive links, PixelDrain links, or direct HTTP/HTTPS file links!
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as 👤 Developer / User
     participant GHA as ⚡ GitHub Actions Workflow
-    participant SF as 🌐 SourceForge / Cloud Host
-    participant Engine as 🛠️ MIO-KITCHEN Builder Engine
-    participant GF as 📤 GoFile API
+    participant SF as 🌐 SourceForge Multi-Mirror
+    participant Engine as 🛠️ Transsion Builder Engine
+    participant GF as 📤 GoFile Cloud API
 
     User->>GHA: Trigger Workflow (rom_url, device, codename, fw_version, region)
-    GHA->>SF: Download Raw Stock ROM Archive (8.45 GB)
-    SF-->>GHA: Direct Stream Complete
-    GHA->>Engine: Extract, Merge Super Partitions & Compress ZSTD Level 19
+    GHA->>SF: Multi-Mirror Parallel Stream (8.45 GB in ~25 sec)
+    SF-->>GHA: Download Complete (80+ MB/s)
+    GHA->>Engine: Extract, Merge Super Partitions & Compress ZSTD Level 3/19
     Engine-->>GHA: Flashable ZIP Package Built (7.74 GB)
-    GHA->>GF: Dynamic Multi-Server Upload
-    GF-->>User: Output GoFile Direct Download URL on Summary Page!
+    GHA->>GF: Dynamic Multi-Server Direct Stream Upload
+    GF-->>User: GoFile Direct Download URL Output on Summary Page!
 ```
 
-1. Navigate to **[sheikhmehraann/transsion-flashable-builder Actions](https://github.com/sheikhmehraann/transsion-flashable-builder/actions)**.
+1. Go to **[sheikhmehraann/transsion-flashable-builder Actions](https://github.com/sheikhmehraann/transsion-flashable-builder/actions)**.
 2. Select **Build Flashable ROM & Upload to GoFile**.
-3. Click **Run workflow** and input:
-   - **`rom_url`**: SourceForge, Needrom, Google Drive, Mega, PixelDrain, or GoFile URL.
+3. Click **Run workflow** and fill in the fields:
+   - **`rom_url`**: `https://sourceforge.net/projects/rama982/files/OFFICIAL-FW/X6871-15.1.2.145SP02%28OP001PF001AZ%29.zip/download`
    - **`device_name`**: `Infinix GT 20 Pro`
    - **`codename`**: `X6871`
    - **`fw_version`**: `X6871-15.1.2.145SP02(OP001PF001AZ)`
    - **`region`**: `Open`
-4. Click **Run workflow**. Upon completion, your GoFile download link will appear directly on the Job Summary page!
+   - **`zstd_lvl`**: `3` (Fastest / Recommended)
+4. Click **Run workflow**. When finished, your GoFile download link will appear directly on the Summary page!
 
 ---
 
@@ -173,9 +172,9 @@ transsion-flashable-builder/
 │   │   ├── imgkit, lpmake, zstd, simg2img, brotli, busybox, cpio, extract.erofs...
 │   └── windows/                      # Windows executable tools
 │       ├── imgkit.exe, lpmake.exe, zstd.exe, simg2img.exe...
-├── transsion_flashable_builder.py    # Local GUI Application (Tkinter)
+├── transsion_flashable_builder.py    # GUI Application (Tkinter)
 ├── build_cli.py                      # Headless CLI Engine
-├── download_rom.py                   # Multi-source smart download engine
+├── download_rom.py                   # Multi-source smart downloader
 ├── gofile_uploader.py                # GoFile dynamic server API uploader
 ├── README.md
 ├── LICENSE
@@ -196,7 +195,7 @@ Designed with ❤️ by **Mehraan**
 <br>
 Built with MediaTek / Transsion `lptools` dynamic partition management approach.
 <br>
-Uses Facebook [Zstandard (zstd)](https://github.com/facebook/zstd) for ultra-compression.
+Uses Facebook [Zstandard (zstd)](https://github.com/facebook/zstd) for multi-threaded compression.
 <br><br>
 Released under the [MIT License](LICENSE).
 
