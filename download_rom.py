@@ -5,6 +5,8 @@ Supports: SourceForge, Needrom, Google Drive (Virus Bypass), Mega.nz, PixelDrain
 """
 import sys, os, re, subprocess, urllib.request, json, requests, html
 
+UA_BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
 def is_valid_rom_file(dest_path, min_size_mb=10):
     if not os.path.isfile(dest_path):
         return False
@@ -38,7 +40,7 @@ def download_mediafire(url, dest_path):
         print(f"[DOWNLOAD] MediaFire link detected: {url}")
         try:
             session = requests.Session()
-            session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            session.headers.update({"User-Agent": UA_BROWSER})
             resp = session.get(url, timeout=15)
             match = re.search(r'href=["\'](https?://download\d+\.mediafire\.com/[^"\']+)["\']', resp.text)
             if match:
@@ -61,15 +63,82 @@ def download_pixeldrain(url, dest_path):
 def download_sourceforge(url, dest_path):
     if "sourceforge.net" in url:
         print(f"[DOWNLOAD] SourceForge link detected: {url}")
-        match = re.search(r'sourceforge\.net/projects/([^/]+)/files/(.+?)(?:/download)?(?:\?.*)?$', url)
-        if match:
-            project, file_path = match.group(1), match.group(2)
-            direct_url = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=fastly"
+        
+        # Clean target URL
+        if "/files/" in url and not url.endswith("/download"):
+            target_url = url.split('?')[0].rstrip('/') + "/download"
         else:
-            direct_url = url if "use_mirror=" in url else f"{url}?use_mirror=fastly"
+            target_url = url.split('?')[0]
 
-        print(f"[DOWNLOAD] Fastly SourceForge Mirror URL: {direct_url}")
-        return download_direct(direct_url, dest_path)
+        print(f"[DOWNLOAD] Target SourceForge download URL: {target_url}")
+
+        # Strategy 1: High-Speed multi-connection aria2c with browser User-Agent & follow-redirects
+        try:
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+            cmd = [
+                "aria2c",
+                "-x", "16",
+                "-s", "16",
+                "-k", "1M",
+                "-L",
+                "--max-tries=5",
+                "--retry-wait=2",
+                "--file-allocation=none",
+                "--summary-interval=5",
+                f"--user-agent={UA_BROWSER}",
+                "-o", os.path.basename(dest_path),
+                "-d", os.path.dirname(dest_path),
+                target_url
+            ]
+            res = subprocess.run(cmd)
+            if res.returncode == 0 and is_valid_rom_file(dest_path):
+                print("[DOWNLOAD] SourceForge aria2c download succeeded!")
+                return True
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+        except FileNotFoundError:
+            pass
+
+        # Strategy 2: Direct curl -L stream
+        try:
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+            cmd = ["curl", "-s", "-L", "-A", UA_BROWSER, "-o", dest_path, target_url]
+            res = subprocess.run(cmd)
+            if res.returncode == 0 and is_valid_rom_file(dest_path):
+                print("[DOWNLOAD] SourceForge curl download succeeded!")
+                return True
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+        except Exception:
+            pass
+
+        # Strategy 3: Python requests stream
+        try:
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+            session = requests.Session()
+            session.headers.update({"User-Agent": UA_BROWSER})
+            resp = session.get(target_url, allow_redirects=True, stream=True, timeout=30)
+            if resp.status_code in (200, 206):
+                total_len = int(resp.headers.get('content-length', 0))
+                dl = 0
+                with open(dest_path, 'wb') as out_file:
+                    for chunk in resp.iter_content(chunk_size=4 * 1024 * 1024):
+                        if chunk:
+                            out_file.write(chunk)
+                            dl += len(chunk)
+                            if total_len > 0:
+                                done = int(50 * dl / total_len)
+                                print(f"\r  [{'=' * done}{' ' * (50-done)}] {dl/(1024*1024):.1f}/{total_len/(1024*1024):.1f} MB", end='', flush=True)
+                print()
+                if is_valid_rom_file(dest_path):
+                    print("[DOWNLOAD] SourceForge requests download succeeded!")
+                    return True
+        except Exception as e:
+            print(f"[ERR] SourceForge requests fallback error: {e}")
+
     return False
 
 def download_gofile(url, dest_path):
@@ -80,7 +149,7 @@ def download_gofile(url, dest_path):
         try:
             req = urllib.request.Request(
                 f"https://api.gofile.io/contents/{content_id}",
-                headers={"User-Agent": "Mozilla/5.0"}
+                headers={"User-Agent": UA_BROWSER}
             )
             with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
@@ -127,9 +196,7 @@ def download_gdrive(url, dest_path):
         print(f"[GDRIVE] Strategy 2: Form-based Virus Warning Bypass Engine for ID: {file_id}...")
         try:
             session = requests.Session()
-            session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            })
+            session.headers.update({"User-Agent": UA_BROWSER})
             base_url = f"https://drive.google.com/uc?export=download&id={file_id}"
             resp = session.get(base_url, timeout=15)
 
@@ -209,7 +276,7 @@ def download_needrom(url, dest_path, user=None, password=None, cookie=None):
     try:
         session = requests.Session()
         session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "User-Agent": UA_BROWSER,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Referer": "https://www.needrom.com/"
         })
@@ -256,22 +323,7 @@ def download_direct(url, dest_path, session=None, headers=None):
         print("[WARN] Skipping direct curl/aria2 download for Google Drive URL.")
         return False
 
-    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    
-    # Resolve 302 redirects first to obtain final direct CDN domain
-    target_url = url
-    try:
-        req_headers = {"User-Agent": ua}
-        if headers:
-            req_headers.update(headers)
-        r = requests.head(url, headers=req_headers, allow_redirects=True, timeout=10)
-        if r.url:
-            target_url = r.url
-            print(f"[DOWNLOAD] Resolved direct CDN endpoint: {target_url}")
-    except Exception:
-        pass
-
-    print(f"[DOWNLOAD] Streaming download from: {target_url}")
+    print(f"[DOWNLOAD] Direct download target: {url}")
 
     # Try aria2c first for 16-thread multi-connection gigabit speed
     try:
@@ -282,16 +334,17 @@ def download_direct(url, dest_path, session=None, headers=None):
             "-x", "16",
             "-s", "16",
             "-k", "1M",
+            "-L",
+            "--max-tries=5",
             "--file-allocation=none",
             "--summary-interval=5",
-            "--console-log-level=notice",
-            f"--user-agent={ua}",
+            f"--user-agent={UA_BROWSER}",
             "-o", os.path.basename(dest_path),
             "-d", os.path.dirname(dest_path)
         ]
         if headers and "Cookie" in headers:
             cmd.extend(["--header", f"Cookie: {headers['Cookie']}"])
-        cmd.append(target_url)
+        cmd.append(url)
 
         res = subprocess.run(cmd)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
@@ -305,10 +358,10 @@ def download_direct(url, dest_path, session=None, headers=None):
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
-        cmd = ["curl", "-L", "-A", ua, "-o", dest_path]
+        cmd = ["curl", "-L", "-A", UA_BROWSER, "-o", dest_path]
         if headers and "Cookie" in headers:
             cmd.extend(["-H", f"Cookie: {headers['Cookie']}"])
-        cmd.append(target_url)
+        cmd.append(url)
         res = subprocess.run(cmd)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
             return True
@@ -321,12 +374,12 @@ def download_direct(url, dest_path, session=None, headers=None):
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
-        req_headers = {"User-Agent": ua}
+        req_headers = {"User-Agent": UA_BROWSER}
         if headers:
             req_headers.update(headers)
         
         req_session = session if session else requests.Session()
-        resp = req_session.get(target_url, headers=req_headers, allow_redirects=True, stream=True, timeout=30)
+        resp = req_session.get(url, headers=req_headers, allow_redirects=True, stream=True, timeout=30)
         if resp.status_code in (200, 206):
             total_len = int(resp.headers.get('content-length', 0))
             dl = 0
