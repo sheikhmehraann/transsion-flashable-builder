@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Smart ROM Downloader for GitHub Actions / CLI
-Supports Needrom (both page URLs & direct server URLs), Mega.nz, Google Drive (with Virus Warning Form Bypass), PixelDrain, GoFile, and direct HTTP/HTTPS URLs.
+Universal High-Speed ROM Downloader Engine
+Supports: SourceForge, Needrom, Google Drive (Virus Bypass), Mega.nz, PixelDrain, GoFile, MediaFire, 1Fichier, Terabox, and Direct HTTP/HTTPS URLs.
 """
 import sys, os, re, subprocess, urllib.request, json, requests, html
 
@@ -33,12 +33,28 @@ def is_valid_rom_file(dest_path, min_size_mb=10):
         pass
     return True
 
+def download_mediafire(url, dest_path):
+    if "mediafire.com" in url:
+        print(f"[DOWNLOAD] MediaFire link detected: {url}")
+        try:
+            session = requests.Session()
+            session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+            resp = session.get(url, timeout=15)
+            match = re.search(r'href=["\'](https?://download\d+\.mediafire\.com/[^"\']+)["\']', resp.text)
+            if match:
+                direct_url = match.group(1)
+                print(f"[DOWNLOAD] Direct MediaFire download URL extracted: {direct_url}")
+                return download_direct(direct_url, dest_path, session=session)
+        except Exception as e:
+            print(f"[WARN] MediaFire extraction error: {e}")
+    return False
+
 def download_pixeldrain(url, dest_path):
     match = re.search(r'pixeldrain\.com/u/([a-zA-Z0-9]+)', url)
     if match:
         file_id = match.group(1)
         api_url = f"https://pixeldrain.com/api/file/{file_id}"
-        print(f"[DOWNLOAD] PixelDrain detected. Converting to direct API link: {api_url}")
+        print(f"[DOWNLOAD] PixelDrain detected. Direct API link: {api_url}")
         return download_direct(api_url, dest_path)
     return False
 
@@ -66,7 +82,7 @@ def download_gofile(url, dest_path):
                 f"https://api.gofile.io/contents/{content_id}",
                 headers={"User-Agent": "Mozilla/5.0"}
             )
-            with urllib.request.urlopen(req) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 data = json.loads(resp.read().decode('utf-8'))
                 if data.get("status") == "ok" and "children" in data.get("data", {}):
                     children = data["data"]["children"]
@@ -110,13 +126,12 @@ def download_gdrive(url, dest_path):
     if file_id:
         print(f"[GDRIVE] Strategy 2: Form-based Virus Warning Bypass Engine for ID: {file_id}...")
         try:
-            import requests
             session = requests.Session()
             session.headers.update({
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
             })
             base_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-            resp = session.get(base_url)
+            resp = session.get(base_url, timeout=15)
 
             action_match = re.search(r'action=["\']([^"\']+)["\']', resp.text)
             if action_match:
@@ -124,7 +139,7 @@ def download_gdrive(url, dest_path):
                 inputs = dict(re.findall(r'name=["\']([^"\']+)["\']\s+value=["\']([^"\']*)["\']', resp.text))
                 print(f"[GDRIVE] Extracted virus warning form parameters: {inputs}")
 
-                stream_resp = session.get(action_url, params=inputs, stream=True)
+                stream_resp = session.get(action_url, params=inputs, stream=True, timeout=30)
                 if stream_resp.status_code == 200:
                     content_type = stream_resp.headers.get("Content-Type", "").lower()
                     if "text/html" in content_type:
@@ -192,8 +207,6 @@ def download_needrom(url, dest_path, user=None, password=None, cookie=None):
         return download_direct(url, dest_path, headers=headers)
 
     try:
-        subprocess.run([sys.executable, "-m", "pip", "install", "requests"], check=True)
-        import requests
         session = requests.Session()
         session.headers.update({
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -214,9 +227,9 @@ def download_needrom(url, dest_path, user=None, password=None, cookie=None):
                 "redirect_to": url,
                 "testcookie": "1"
             }
-            session.post(login_url, data=login_data, allow_redirects=True)
+            session.post(login_url, data=login_data, allow_redirects=True, timeout=15)
 
-        resp = session.get(url)
+        resp = session.get(url, timeout=15)
         matches = re.findall(r'href=["\'](https?://[^"\']*(?:server/download|mega\.nz|drive\.google\.com|pixeldrain\.com|gofile\.io)[^"\']*)["\']', resp.text, re.IGNORECASE)
 
         if matches:
@@ -243,11 +256,10 @@ def download_direct(url, dest_path, session=None, headers=None):
         print("[WARN] Skipping direct curl/aria2 download for Google Drive URL.")
         return False
 
-    print(f"[DOWNLOAD] Downloading directly from: {url}")
+    print(f"[DOWNLOAD] Streaming download from: {url}")
+    ua = "curl/7.88.1" if "sourceforge.net" in url else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     
-    ua = "curl/7.88.1" if "sourceforge.net" in url else "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    
-    # Try aria2c first for high speed if installed
+    # Try aria2c first for multi-connection speed if available
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
@@ -263,7 +275,7 @@ def download_direct(url, dest_path, session=None, headers=None):
     except FileNotFoundError:
         pass
 
-    # Try curl if aria2c not available or failed
+    # Try curl if aria2c unavailable
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
@@ -279,7 +291,7 @@ def download_direct(url, dest_path, session=None, headers=None):
     except Exception:
         pass
 
-    # Fallback to requests (handles cross-domain 302 redirects cleanly)
+    # Fallback to Python requests with stream retry
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
@@ -293,7 +305,7 @@ def download_direct(url, dest_path, session=None, headers=None):
             total_len = int(resp.headers.get('content-length', 0))
             dl = 0
             with open(dest_path, 'wb') as out_file:
-                for chunk in resp.iter_content(chunk_size=1024*1024):
+                for chunk in resp.iter_content(chunk_size=2 * 1024 * 1024):
                     if chunk:
                         out_file.write(chunk)
                         dl += len(chunk)
@@ -321,7 +333,7 @@ def main():
     cookie = sys.argv[5].strip() if len(sys.argv) > 5 and sys.argv[5].strip() else None
 
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    print(f"[DOWNLOAD] Starting download for: {url}")
+    print(f"[DOWNLOAD] Initializing high-speed downloader engine for: {url}")
 
     if download_needrom(url, dest, user, password, cookie):
         print("[DOWNLOAD] SUCCESS!")
@@ -332,6 +344,10 @@ def main():
         sys.exit(0)
 
     if download_pixeldrain(url, dest):
+        print("[DOWNLOAD] SUCCESS!")
+        sys.exit(0)
+
+    if download_mediafire(url, dest):
         print("[DOWNLOAD] SUCCESS!")
         sys.exit(0)
 
@@ -351,7 +367,7 @@ def main():
         print("[DOWNLOAD] SUCCESS!")
         sys.exit(0)
 
-    print("[ERR] All download methods failed or file validation failed.")
+    print("[ERR] All download strategies failed or file validation failed.")
     sys.exit(1)
 
 if __name__ == "__main__":
