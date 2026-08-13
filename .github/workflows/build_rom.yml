@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       rom_url:
-        description: 'Stock ROM Download Link (Needrom page/server URL, Mega, Google Drive, PixelDrain, GoFile, SourceForge, Direct Link)'
+        description: 'Stock ROM Download Link (SourceForge, Needrom, Google Drive, Mega, PixelDrain, GoFile, MediaFire, Direct Link)'
         required: true
         type: string
       device_name:
@@ -16,13 +16,22 @@ on:
         required: true
         type: string
       fw_version:
-        description: 'Firmware Version (e.g., X6871-15.1.2.165SP05(OP001PF001AZ))'
+        description: 'Firmware Version (e.g., X6871-15.1.2.145SP02(OP001PF001AZ))'
         required: true
         type: string
       region:
-        description: 'Region Subfolder Name (e.g., India)'
+        description: 'Region Subfolder Name (e.g., Open, India)'
         required: true
         type: string
+      zstd_lvl:
+        description: 'Zstandard Compression Level (3 = Fast/Recommended 3-min, 6 = Balanced, 19 = Maximum Ultra)'
+        required: false
+        default: '3'
+        type: choice
+        options:
+          - '3'
+          - '6'
+          - '19'
       needrom_cookie:
         description: 'Needrom Session/CF Cookie (Optional - for private/server Needrom links)'
         required: false
@@ -81,9 +90,9 @@ jobs:
           mkdir -p work/extracted_rom
           7z x "work/stock_rom_archive" -owork/extracted_rom -y
 
-      - name: Build Recovery Flashable ROM (Zstd Fast Level 3 Compression)
+      - name: Build Recovery Flashable ROM (Zstd Compression Level ${{ inputs.zstd_lvl || '3' }})
         run: |
-          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "3"
+          python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "${{ inputs.zstd_lvl || '3' }}"
 
       - name: Upload Flashable ROM to GoFile
         run: |
