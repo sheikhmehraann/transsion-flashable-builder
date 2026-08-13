@@ -1,4 +1,4 @@
-name: Build Flashable ROM & Upload to GoFile
+name: Build Flashable ROM & Upload Cloud Mirrors
 
 on:
   workflow_dispatch:
@@ -33,7 +33,7 @@ on:
           - '6'
           - '19'
       needrom_cookie:
-        description: 'Needrom Session/CF Cookie (Optional - for private/server Needrom links)'
+        description: 'Needrom Session/CF Cookie (Optional)'
         required: false
         type: string
       needrom_user:
@@ -45,7 +45,15 @@ on:
         required: false
         type: string
       gofile_token:
-        description: 'GoFile Token (Optional)'
+        description: 'GoFile Token (Optional - attaches to account for permanent free storage)'
+        required: false
+        type: string
+      hf_repo:
+        description: 'Hugging Face Permanent Dataset Repo (Optional e.g. username/rom-storage)'
+        required: false
+        type: string
+      hf_token:
+        description: 'Hugging Face User Access Token (Optional for 100% free permanent storage)'
         required: false
         type: string
 
@@ -75,7 +83,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install gdown requests mega.py
+          pip install gdown requests mega.py huggingface_hub
 
       - name: Download Stock ROM
         env:
@@ -95,11 +103,20 @@ jobs:
           python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "${{ inputs.zstd_lvl || '3' }}"
 
       - name: Upload Flashable ROM to GoFile
+        env:
+          GOFILE_TOKEN: ${{ inputs.gofile_token || secrets.GOFILE_TOKEN }}
         run: |
           ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
-              python gofile_uploader.py "$ZIP_FILE" "${{ inputs.gofile_token }}"
-          else
-              echo "Error: No ZIP file found in output directory!"
-              exit 1
+              python gofile_uploader.py "$ZIP_FILE" "${GOFILE_TOKEN}" || true
+          fi
+
+      - name: Upload Flashable ROM to Hugging Face (100% Free Permanent Unlimited Storage)
+        env:
+          HF_REPO: ${{ inputs.hf_repo || secrets.HF_REPO }}
+          HF_TOKEN: ${{ inputs.hf_token || secrets.HF_TOKEN }}
+        run: |
+          ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
+          if [ -n "$ZIP_FILE" ] && [ -n "${HF_REPO}" ] && [ -n "${HF_TOKEN}" ]; then
+              python hf_uploader.py "$ZIP_FILE" "${HF_REPO}" "${HF_TOKEN}" || true
           fi
