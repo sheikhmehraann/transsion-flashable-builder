@@ -63,84 +63,29 @@ def download_pixeldrain(url, dest_path):
 def download_sourceforge(url, dest_path):
     if "sourceforge.net" in url:
         print(f"[DOWNLOAD] SourceForge link detected: {url}")
-        
-        # Resolve real redirect URL first via requests
-        ua = UA_BROWSER
-        target_url = url
-        try:
-            r = requests.head(url, headers={"User-Agent": ua}, allow_redirects=True, timeout=15)
-            if r.url and "sourceforge.net" in r.url:
-                target_url = r.url
-                print(f"[DOWNLOAD] Resolved direct SourceForge CDN URL: {target_url}")
-        except Exception as e:
-            print(f"[WARN] Redirect resolution note: {e}")
+        match = re.search(r'sourceforge\.net/projects/([^/]+)/files/(.+?)(?:/download)?(?:\?.*)?$', url)
+        if match:
+            project, file_path = match.group(1), match.group(2)
+            base_dl = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=autoselect"
+        else:
+            base_dl = url if "use_mirror=" in url else f"{url}?use_mirror=autoselect"
 
-        # Strategy 1: High-Speed multi-connection aria2c
-        try:
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
-            cmd = [
-                "aria2c",
-                "-x", "16",
-                "-s", "16",
-                "-k", "1M",
-                "--max-tries=5",
-                "--retry-wait=2",
-                "--file-allocation=none",
-                "--summary-interval=5",
-                f"--user-agent={ua}",
-                "-o", os.path.basename(dest_path),
-                "-d", os.path.dirname(dest_path),
-                target_url
-            ]
-            res = subprocess.run(cmd)
-            if res.returncode == 0 and is_valid_rom_file(dest_path):
-                print("[DOWNLOAD] SourceForge aria2c download succeeded!")
-                return True
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
-        except FileNotFoundError:
-            pass
+        print(f"[SF] Base mirror URL: {base_dl}")
 
-        # Strategy 2: Direct curl -L stream
+        # Follow redirects via requests session stream to obtain the REAL direct CDN binary file URL (.dl.sourceforge.net)
+        direct_cdn_url = base_dl
         try:
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
-            cmd = ["curl", "-s", "-L", "-A", ua, "-o", dest_path, target_url]
-            res = subprocess.run(cmd)
-            if res.returncode == 0 and is_valid_rom_file(dest_path):
-                print("[DOWNLOAD] SourceForge curl download succeeded!")
-                return True
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
-        except Exception:
-            pass
-
-        # Strategy 3: Python requests stream
-        try:
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
             session = requests.Session()
-            session.headers.update({"User-Agent": ua})
-            resp = session.get(target_url, allow_redirects=True, stream=True, timeout=30)
-            if resp.status_code in (200, 206):
-                total_len = int(resp.headers.get('content-length', 0))
-                dl = 0
-                with open(dest_path, 'wb') as out_file:
-                    for chunk in resp.iter_content(chunk_size=4 * 1024 * 1024):
-                        if chunk:
-                            out_file.write(chunk)
-                            dl += len(chunk)
-                            if total_len > 0:
-                                done = int(50 * dl / total_len)
-                                print(f"\r  [{'=' * done}{' ' * (50-done)}] {dl/(1024*1024):.1f}/{total_len/(1024*1024):.1f} MB", end='', flush=True)
-                print()
-                if is_valid_rom_file(dest_path):
-                    print("[DOWNLOAD] SourceForge requests download succeeded!")
-                    return True
+            session.headers.update({"User-Agent": UA_BROWSER})
+            resp = session.get(base_dl, allow_redirects=True, stream=True, timeout=20)
+            if resp.url and "sourceforge.net" in resp.url:
+                direct_cdn_url = resp.url
+                print(f"[SF] Extracted REAL direct CDN binary URL: {direct_cdn_url}")
         except Exception as e:
-            print(f"[ERR] SourceForge requests fallback error: {e}")
+            print(f"[WARN] Direct CDN resolution note: {e}")
 
+        # Download via aria2c or direct streaming
+        return download_direct(direct_cdn_url, dest_path)
     return False
 
 def download_gofile(url, dest_path):
@@ -327,7 +272,7 @@ def download_direct(url, dest_path, session=None, headers=None):
 
     print(f"[DOWNLOAD] Direct download target: {url}")
 
-    # Try aria2c first for 16-thread multi-connection gigabit speed
+    # Strategy 1: Multi-threaded aria2c (16 connections, 1MB chunks)
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
@@ -349,29 +294,31 @@ def download_direct(url, dest_path, session=None, headers=None):
 
         res = subprocess.run(cmd)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
+            print("[DOWNLOAD] Direct aria2c download succeeded!")
             return True
         if os.path.exists(dest_path):
             os.remove(dest_path)
     except FileNotFoundError:
         pass
 
-    # Try curl if aria2c unavailable
+    # Strategy 2: Direct curl -L stream
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
-        cmd = ["curl", "-L", "-A", UA_BROWSER, "-o", dest_path]
+        cmd = ["curl", "-s", "-L", "-A", UA_BROWSER, "-o", dest_path]
         if headers and "Cookie" in headers:
             cmd.extend(["-H", f"Cookie: {headers['Cookie']}"])
         cmd.append(url)
         res = subprocess.run(cmd)
         if res.returncode == 0 and is_valid_rom_file(dest_path):
+            print("[DOWNLOAD] Direct curl download succeeded!")
             return True
         if os.path.exists(dest_path):
             os.remove(dest_path)
     except Exception:
         pass
 
-    # Fallback to Python requests with stream retry
+    # Strategy 3: Python requests stream
     try:
         if os.path.exists(dest_path):
             os.remove(dest_path)
@@ -393,7 +340,9 @@ def download_direct(url, dest_path, session=None, headers=None):
                             done = int(50 * dl / total_len)
                             print(f"\r  [{'=' * done}{' ' * (50-done)}] {dl/(1024*1024):.1f}/{total_len/(1024*1024):.1f} MB", end='', flush=True)
             print()
-            return is_valid_rom_file(dest_path)
+            if is_valid_rom_file(dest_path):
+                print("[DOWNLOAD] Direct requests download succeeded!")
+                return True
     except Exception as e:
         print(f"[ERR] Requests download fallback error: {e}")
 
