@@ -6,6 +6,14 @@ Supports: SourceForge, Needrom, Google Drive (Virus Bypass), Mega.nz, PixelDrain
 import sys, os, re, subprocess, urllib.request, json, requests, html
 
 UA_BROWSER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+UA_CURL = "curl/7.88.1"
+
+def safe_remove(dest_path):
+    if os.path.exists(dest_path):
+        try:
+            os.remove(dest_path)
+        except Exception:
+            pass
 
 def is_valid_rom_file(dest_path, min_size_mb=10):
     if not os.path.isfile(dest_path):
@@ -20,8 +28,7 @@ def is_valid_rom_file(dest_path, min_size_mb=10):
                     print("[ERR] Downloaded content is an HTML/JSON error page, not a valid ROM archive!")
         except Exception:
             pass
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
+        safe_remove(dest_path)
         return False
 
     try:
@@ -29,7 +36,7 @@ def is_valid_rom_file(dest_path, min_size_mb=10):
             head = f.read(512).lower()
             if b'<!doctype html' in head or b'<html' in head or b'access denied' in head:
                 print("[ERR] Downloaded file is an HTML web page, not a valid archive!")
-                os.remove(dest_path)
+                safe_remove(dest_path)
                 return False
     except Exception:
         pass
@@ -66,26 +73,27 @@ def download_sourceforge(url, dest_path):
         match = re.search(r'sourceforge\.net/projects/([^/]+)/files/(.+?)(?:/download)?(?:\?.*)?$', url)
         if match:
             project, file_path = match.group(1), match.group(2)
-            base_dl = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=autoselect"
+            base_url = f"https://downloads.sourceforge.net/project/{project}/{file_path}?use_mirror=autoselect"
         else:
-            base_dl = url if "use_mirror=" in url else f"{url}?use_mirror=autoselect"
+            base_url = url if "use_mirror=" in url else f"{url}?use_mirror=autoselect"
 
-        print(f"[SF] Base mirror URL: {base_dl}")
-
-        # Follow redirects via requests session stream to obtain the REAL direct CDN binary file URL (.dl.sourceforge.net)
-        direct_cdn_url = base_dl
+        print(f"[SF] Requesting signed mirror location for: {base_url}")
+        
+        signed_cdn_url = base_url
         try:
-            session = requests.Session()
-            session.headers.update({"User-Agent": UA_BROWSER})
-            resp = session.get(base_dl, allow_redirects=True, stream=True, timeout=20)
-            if resp.url and "sourceforge.net" in resp.url:
-                direct_cdn_url = resp.url
-                print(f"[SF] Extracted REAL direct CDN binary URL: {direct_cdn_url}")
+            res = subprocess.run(
+                ["curl", "-s", "-I", "-A", UA_CURL, base_url],
+                capture_output=True, text=True, timeout=15
+            )
+            for line in res.stdout.splitlines():
+                if line.lower().startswith("location:"):
+                    signed_cdn_url = line.split(":", 1)[1].strip()
+                    print(f"[SF] Successfully extracted signed CDN URL: {signed_cdn_url}")
+                    break
         except Exception as e:
-            print(f"[WARN] Direct CDN resolution note: {e}")
+            print(f"[WARN] Signed CDN URL extraction note: {e}")
 
-        # Download via aria2c or direct streaming
-        return download_direct(direct_cdn_url, dest_path)
+        return download_direct(signed_cdn_url, dest_path)
     return False
 
 def download_gofile(url, dest_path):
@@ -182,8 +190,7 @@ def download_gdrive(url, dest_path):
         except Exception as e:
             print(f"[GDRIVE] Strategy 2 (Form Bypass) failed: {e}")
 
-    if os.path.exists(dest_path):
-        os.remove(dest_path)
+    safe_remove(dest_path)
     return False
 
 def download_mega(url, dest_path):
@@ -199,8 +206,7 @@ def download_mega(url, dest_path):
             return is_valid_rom_file(dest_path)
         except Exception as e:
             print(f"[ERR] Mega download failed: {e}")
-            if os.path.exists(dest_path):
-                os.remove(dest_path)
+            safe_remove(dest_path)
             return False
     return False
 
@@ -274,8 +280,7 @@ def download_direct(url, dest_path, session=None, headers=None):
 
     # Strategy 1: Multi-threaded aria2c (16 connections, 1MB chunks)
     try:
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
+        safe_remove(dest_path)
         cmd = [
             "aria2c",
             "-x", "16",
@@ -296,15 +301,13 @@ def download_direct(url, dest_path, session=None, headers=None):
         if res.returncode == 0 and is_valid_rom_file(dest_path):
             print("[DOWNLOAD] Direct aria2c download succeeded!")
             return True
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
+        safe_remove(dest_path)
     except FileNotFoundError:
         pass
 
     # Strategy 2: Direct curl -L stream
     try:
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
+        safe_remove(dest_path)
         cmd = ["curl", "-s", "-L", "-A", UA_BROWSER, "-o", dest_path]
         if headers and "Cookie" in headers:
             cmd.extend(["-H", f"Cookie: {headers['Cookie']}"])
@@ -313,15 +316,13 @@ def download_direct(url, dest_path, session=None, headers=None):
         if res.returncode == 0 and is_valid_rom_file(dest_path):
             print("[DOWNLOAD] Direct curl download succeeded!")
             return True
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
+        safe_remove(dest_path)
     except Exception:
         pass
 
     # Strategy 3: Python requests stream
     try:
-        if os.path.exists(dest_path):
-            os.remove(dest_path)
+        safe_remove(dest_path)
         req_headers = {"User-Agent": UA_BROWSER}
         if headers:
             req_headers.update(headers)
@@ -346,8 +347,7 @@ def download_direct(url, dest_path, session=None, headers=None):
     except Exception as e:
         print(f"[ERR] Requests download fallback error: {e}")
 
-    if os.path.exists(dest_path) and not is_valid_rom_file(dest_path):
-        os.remove(dest_path)
+    safe_remove(dest_path)
     return False
 
 def main():

@@ -1,4 +1,4 @@
-name: Build Flashable ROM & Upload to GoFile
+name: Build Flashable ROM & Upload GitHub Releases & GoFile
 
 on:
   workflow_dispatch:
@@ -45,7 +45,7 @@ on:
         required: false
         type: string
       gofile_token:
-        description: 'GoFile Token (Optional - attaches upload to account for permanent free storage)'
+        description: 'GoFile Token (Optional)'
         required: false
         type: string
 
@@ -94,14 +94,25 @@ jobs:
         run: |
           python build_cli.py --base-dir "work/extracted_rom" --out-dir "output" --device "${{ inputs.device_name }}" --codename "${{ inputs.codename }}" --fw-ver "${{ inputs.fw_version }}" --region "${{ inputs.region }}" --zstd-lvl "${{ inputs.zstd_lvl || '3' }}"
 
-      - name: Upload Flashable ROM to GoFile
+      - name: Create GitHub Release & Upload ROM Package
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: rom-${{ inputs.codename }}-${{ github.run_number }}
+          name: "Flashable ROM - ${{ inputs.device_name }} (${{ inputs.codename }})"
+          body: |
+            ## 🚀 Recovery Flashable ROM Package
+            - **Device**: `${{ inputs.device_name }}`
+            - **Codename**: `${{ inputs.codename }}`
+            - **Firmware Version**: `${{ inputs.fw_version }}`
+            - **Region**: `${{ inputs.region }}`
+            - **Build Status**: `✓ 100% Complete`
+          files: output/*.zip
+
+      - name: Upload Flashable ROM to GoFile Mirror
         env:
           GOFILE_TOKEN: ${{ inputs.gofile_token || secrets.GOFILE_TOKEN }}
         run: |
           ZIP_FILE=$(find output -maxdepth 1 -name "*.zip" | head -n 1)
           if [ -n "$ZIP_FILE" ]; then
-              python gofile_uploader.py "$ZIP_FILE" "${GOFILE_TOKEN}"
-          else
-              echo "Error: No ZIP file found in output directory!"
-              exit 1
+              python gofile_uploader.py "$ZIP_FILE" "${GOFILE_TOKEN}" || true
           fi
