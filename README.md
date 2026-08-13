@@ -103,7 +103,7 @@
 | **📥 Raw Stock Firmware** | SourceForge Direct Stream Mirror (`8.45 GB`) |
 | **⚡ Output Flashable Package** | `X6871-15.1.2.145SP02(OP001PF001AZ)-recovery-ab.zip` (`7.74 GB`) |
 | **⚙️ Build Execution Time** | `20 minutes 23 seconds` (`ubuntu-latest`) |
-| **🚀 Direct Download Mirror** | **[Download Flashable ROM via GoFile](https://gofile.io/d/8iEMdcIK)** |
+| **🚀 Direct Download Mirror** | **[Download Flashable ROM via GoFile](https://gofile.io/d/jLNK2J90)** |
 
 </div>
 
