@@ -78,10 +78,10 @@
 </details>
 
 <details open>
-<summary><b>4. 📤 Dynamic GoFile Release Engine (gofile_uploader.py)</b></summary>
+<summary><b>4. ♾️ Permanent Unlimited Storage (Hugging Face & GoFile)</b></summary>
 
-- Dynamic GoFile API server resolution (`https://api.gofile.io/servers`) auto-discovers active upload nodes (`store-eu-par-5`, `store-eu-par-7`, `store3`, `store1`).
-- Automatic fallback loop ensures error-free uploads and renders an aesthetic **GitHub Action Step Summary** card with direct download links.
+- **GoFile Server API Uploader (`gofile_uploader.py`)**: Dynamic server API resolution (`https://api.gofile.io/servers`) with auto-fallback.
+- **Hugging Face Datasets Uploader (`hf_uploader.py`)**: 100% FREE permanent unlimited storage with direct gigabit download links (`https://huggingface.co/datasets/<user>/<repo>/resolve/main/<file>.zip`) that **never expire**!
 </details>
 
 ---
